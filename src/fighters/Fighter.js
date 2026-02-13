@@ -648,23 +648,32 @@ export class Fighter {
     } else {
       // Calculate frame duration based on state
       let totalDuration;
+      let looping = false;
       switch (this.state) {
         case STATES.PUNCH: totalDuration = GAME_CONFIG.PUNCH_DURATION; break;
         case STATES.KICK: totalDuration = GAME_CONFIG.KICK_DURATION; break;
         case STATES.SPECIAL: totalDuration = this.specialDuration; break;
         case STATES.KO: totalDuration = 800; break;
-        default: totalDuration = 400; break; // Walk cycle, idle bob
+        case STATES.JUMP: totalDuration = 600; break;
+        case STATES.HIT: totalDuration = GAME_CONFIG.HITSTUN_DURATION; break;
+        case STATES.IDLE: totalDuration = 800; looping = true; break;
+        case STATES.WALK_FORWARD: totalDuration = 400; looping = true; break;
+        case STATES.WALK_BACKWARD: totalDuration = 450; looping = true; break;
+        case STATES.VICTORY: totalDuration = 900; looping = true; break;
+        default: totalDuration = 400; break;
       }
 
+      const timer = looping ? (this.stateTimer % totalDuration) : this.stateTimer;
       const frameDuration = totalDuration / frameCount;
-      const currentFrame = Math.min(
-        Math.floor(this.stateTimer / frameDuration),
-        frameCount - 1
-      );
+      const currentFrame = looping
+        ? Math.floor(timer / frameDuration) % frameCount
+        : Math.min(Math.floor(timer / frameDuration), frameCount - 1);
 
       // Interpolate between frames for smoothness
-      const nextFrame = Math.min(currentFrame + 1, frameCount - 1);
-      const t = (this.stateTimer % frameDuration) / frameDuration;
+      const nextFrame = looping
+        ? (currentFrame + 1) % frameCount
+        : Math.min(currentFrame + 1, frameCount - 1);
+      const t = (timer % frameDuration) / frameDuration;
 
       if (currentFrame === nextFrame || this.state === STATES.KO) {
         pose = poses[currentFrame];
@@ -675,9 +684,10 @@ export class Fighter {
 
     // Draw the stick figure: hip positioned so feet land at body bottom
     const drawX = this.x;
-    const drawY = this.y + GAME_CONFIG.BODY_HEIGHT / 2 - 50;
+    const drawY = this.y + GAME_CONFIG.BODY_HEIGHT / 2 - 60;
+    const showGhost = this.isAttacking();
 
-    this.renderer.draw(drawX, drawY, pose, this.facingRight, this.data.color);
+    this.renderer.draw(drawX, drawY, pose, this.facingRight, this.data.color, showGhost);
   }
 
   destroy() {
