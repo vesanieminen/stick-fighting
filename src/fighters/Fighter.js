@@ -125,6 +125,8 @@ export class Fighter {
       if (this.state !== STATES.BLOCK) {
         this.enterState(STATES.BLOCK);
       }
+      // Keep velocity zeroed every frame so pushback doesn't cause sliding
+      this.body.body.setVelocityX(0);
       return;
     }
 
