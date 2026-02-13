@@ -122,9 +122,9 @@ export class InputManager {
       left:    pad.left || stickX < -DEADZONE,
       right:   pad.right || stickX > DEADZONE,
       jump:    pad.A,
-      punch:   pad.X,
+      punch:   pad.B,
       kick:    pad.Y,
-      special: pad.B,
+      special: pad.X,
       block:   pad.L1 || pad.R1,
     };
   }
