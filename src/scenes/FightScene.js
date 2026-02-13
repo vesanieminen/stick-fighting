@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 import { Fighter } from '../fighters/Fighter.js';
-import { FIGHTER_DATA } from '../fighters/FighterData.js';
+import { FIGHTERS } from '../fighters/FighterData.js';
 import { InputManager } from '../input/InputManager.js';
 import { HealthBar } from '../ui/HealthBar.js';
 import { RoundIndicator } from '../ui/RoundIndicator.js';
@@ -60,8 +60,17 @@ export class FightScene extends Phaser.Scene {
     const p1X = 350;
     const p2X = 930;
 
-    this.fighter1 = new Fighter(this, p1X, GAME_CONFIG.GROUND_Y, 0, true, FIGHTER_DATA.balanced);
-    this.fighter2 = new Fighter(this, p2X, GAME_CONFIG.GROUND_Y, 1, false, FIGHTER_DATA.heavy);
+    const p1Data = FIGHTERS[this.registry.get('p1Fighter') || 0];
+    const p2Data = FIGHTERS[this.registry.get('p2Fighter') || 1];
+    this.p1Data = p1Data;
+    this.p2Data = p2Data;
+
+    this.fighter1 = new Fighter(this, p1X, GAME_CONFIG.GROUND_Y, 0, true, p1Data);
+    this.fighter2 = new Fighter(this, p2X, GAME_CONFIG.GROUND_Y, 1, false, p2Data);
+
+    // Cross-reference for teleport special
+    this.fighter1.opponent = this.fighter2;
+    this.fighter2.opponent = this.fighter1;
 
     // Ground collision
     this.physics.add.collider(this.fighter1.body, this.ground);
@@ -85,11 +94,13 @@ export class FightScene extends Phaser.Scene {
     this.p2HealthBar = new HealthBar(this, 750, barY, barWidth, barHeight, 1);
 
     // Player names
-    this.add.text(50, barY - 18, FIGHTER_DATA.balanced.name, {
-      fontSize: '14px', fontFamily: 'monospace', color: '#ffffff'
+    this.add.text(50, barY - 18, this.p1Data.name, {
+      fontSize: '14px', fontFamily: 'monospace',
+      color: `#${this.p1Data.color.toString(16).padStart(6, '0')}`
     });
-    this.add.text(1230, barY - 18, FIGHTER_DATA.heavy.name, {
-      fontSize: '14px', fontFamily: 'monospace', color: '#00ffff'
+    this.add.text(1230, barY - 18, this.p2Data.name, {
+      fontSize: '14px', fontFamily: 'monospace',
+      color: `#${this.p2Data.color.toString(16).padStart(6, '0')}`
     }).setOrigin(1, 0);
 
     // Round indicators
@@ -149,8 +160,8 @@ export class FightScene extends Phaser.Scene {
 
   update(time, delta) {
     // Always update UI
-    this.p1HealthBar.update(this.fighter1.health, GAME_CONFIG.MAX_HEALTH);
-    this.p2HealthBar.update(this.fighter2.health, GAME_CONFIG.MAX_HEALTH);
+    this.p1HealthBar.update(this.fighter1.health, this.fighter1.maxHealth);
+    this.p2HealthBar.update(this.fighter2.health, this.fighter2.maxHealth);
     this.p1RoundInd.update(this.p1Wins);
     this.p2RoundInd.update(this.p2Wins);
 

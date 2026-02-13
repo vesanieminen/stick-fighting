@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { StickFigureRenderer } from '../fighters/StickFigureRenderer.js';
 import { POSES } from '../fighters/FighterAnimations.js';
-import { FIGHTER_DATA } from '../fighters/FighterData.js';
+import { FIGHTERS } from '../fighters/FighterData.js';
 import { SoundManager } from '../audio/SoundManager.js';
 
 export class ResultScene extends Phaser.Scene {
@@ -14,8 +14,10 @@ export class ResultScene extends Phaser.Scene {
     const p1Wins = this.registry.get('p1Wins');
     const p2Wins = this.registry.get('p2Wins');
 
-    const winnerData = winner === 0 ? FIGHTER_DATA.balanced : FIGHTER_DATA.heavy;
-    const loserData = winner === 0 ? FIGHTER_DATA.heavy : FIGHTER_DATA.balanced;
+    const p1Idx = this.registry.get('p1Fighter') || 0;
+    const p2Idx = this.registry.get('p2Fighter') || 1;
+    const winnerData = winner === 0 ? FIGHTERS[p1Idx] : FIGHTERS[p2Idx];
+    const loserData = winner === 0 ? FIGHTERS[p2Idx] : FIGHTERS[p1Idx];
 
     SoundManager.victory();
     const winnerName = winner === 0 ? 'PLAYER 1' : 'PLAYER 2';
@@ -77,9 +79,6 @@ export class ResultScene extends Phaser.Scene {
 
   restart() {
     SoundManager.menuSelect();
-    this.registry.set('p1Wins', 0);
-    this.registry.set('p2Wins', 0);
-    this.registry.set('currentRound', 1);
-    this.scene.start('TitleScene');
+    this.scene.start('CharacterSelectScene');
   }
 }

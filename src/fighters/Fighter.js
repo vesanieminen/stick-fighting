@@ -27,11 +27,14 @@ export class Fighter {
 
     // State
     this.state = STATES.IDLE;
-    this.health = GAME_CONFIG.MAX_HEALTH;
+    this.maxHealth = data.maxHealth || GAME_CONFIG.MAX_HEALTH;
+    this.health = this.maxHealth;
     this.stateTimer = 0;
     this.specialCooldown = 0;
     this.canAct = true;
     this.hasHit = false; // Prevents same attack hitting twice
+    this.specialHitCount = 0; // For multi-hit specials (flurry)
+    this.armorActive = false; // For armor smash
 
     // Physics body using a zone (no texture needed)
     // Place zone so its center is at the right height (body bottom at ground)
@@ -163,17 +166,12 @@ export class Fighter {
         break;
 
       case STATES.SPECIAL:
-        // Lunge forward during active frame
-        if (this.data.specialType === 'lunge' && this.stateTimer > GAME_CONFIG.SPECIAL_DURATION * 0.2 && this.stateTimer < GAME_CONFIG.SPECIAL_DURATION * 0.6) {
-          const dir = this.facingRight ? 1 : -1;
-          this.body.body.setVelocityX(dir * 500);
-        }
-        if (this.data.specialType === 'groundPound' && this.stateTimer > GAME_CONFIG.SPECIAL_DURATION * 0.2 && this.stateTimer < GAME_CONFIG.SPECIAL_DURATION * 0.4) {
-          this.body.body.setVelocityY(-400);
-        }
+        this.updateSpecial(delta);
         if (this.stateTimer >= GAME_CONFIG.SPECIAL_DURATION) {
           this.canAct = true;
           this.hasHit = false;
+          this.specialHitCount = 0;
+          this.armorActive = false;
           this.body.body.setVelocityX(0);
           this.enterState(STATES.IDLE);
         }
@@ -200,6 +198,108 @@ export class Fighter {
           this.body.body.setVelocityX(dir * 100);
         } else {
           this.body.body.setVelocityX(0);
+        }
+        break;
+    }
+  }
+
+  updateSpecial(delta) {
+    const t = this.stateTimer;
+    const dur = GAME_CONFIG.SPECIAL_DURATION;
+    const dir = this.facingRight ? 1 : -1;
+
+    switch (this.data.specialType) {
+      case 'lunge':
+        // Dash forward during active frames
+        if (t > dur * 0.2 && t < dur * 0.6) {
+          this.body.body.setVelocityX(dir * 500);
+        }
+        break;
+
+      case 'groundPound':
+        // Jump up, then slam down
+        if (t > dur * 0.1 && t < dur * 0.3) {
+          this.body.body.setVelocityY(-500);
+        } else if (t > dur * 0.4 && t < dur * 0.6) {
+          this.body.body.setVelocityY(800);
+        }
+        break;
+
+      case 'teleport':
+        // Teleport behind opponent at the active frame
+        if (t > dur * 0.3 && t < dur * 0.35 && this.opponent) {
+          const behindX = this.opponent.x + (this.opponent.facingRight ? -60 : 60);
+          this.body.setPosition(
+            Phaser.Math.Clamp(behindX, GAME_CONFIG.STAGE_LEFT + 30, GAME_CONFIG.STAGE_RIGHT - 30),
+            this.body.y
+          );
+        }
+        break;
+
+      case 'uppercut':
+        // Launch upward with hit
+        if (t > dur * 0.2 && t < dur * 0.4) {
+          this.body.body.setVelocityY(-600);
+          this.body.body.setVelocityX(dir * 150);
+        }
+        break;
+
+      case 'slide':
+        // Low slide along the ground
+        if (t > dur * 0.15 && t < dur * 0.65) {
+          this.body.body.setVelocityX(dir * 550);
+        }
+        break;
+
+      case 'lightningDrop':
+        // Hop up, then slam straight down
+        if (t < dur * 0.25) {
+          this.body.body.setVelocityY(-600);
+          this.body.body.setVelocityX(dir * 100);
+        } else if (t > dur * 0.35 && t < dur * 0.6) {
+          this.body.body.setVelocityY(900);
+          this.body.body.setVelocityX(0);
+        }
+        break;
+
+      case 'flurry':
+        // Rapid multi-hit: reset hasHit periodically
+        if (t > dur * 0.15 && t < dur * 0.75) {
+          this.body.body.setVelocityX(dir * 300);
+          const hitInterval = (dur * 0.6) / (this.data.specialHits || 4);
+          const elapsed = t - dur * 0.15;
+          const hitNum = Math.floor(elapsed / hitInterval);
+          if (hitNum > this.specialHitCount) {
+            this.specialHitCount = hitNum;
+            this.hasHit = false; // Allow next hit
+          }
+        }
+        break;
+
+      case 'armorSmash':
+        // Armor active during windup, then big hit
+        if (t < dur * 0.5) {
+          this.armorActive = true;
+        } else {
+          this.armorActive = false;
+        }
+        if (t > dur * 0.4 && t < dur * 0.6) {
+          this.body.body.setVelocityX(dir * 350);
+        }
+        break;
+
+      case 'whirlwind':
+        // Spin in place with wide range
+        if (t > dur * 0.15 && t < dur * 0.7) {
+          this.body.body.setVelocityX(dir * 200);
+        }
+        break;
+
+      case 'explosion':
+        // Charge then explode in all directions (big range)
+        if (t > dur * 0.5 && t < dur * 0.6) {
+          // Small knockback on self
+          this.body.body.setVelocityX(-dir * 100);
         }
         break;
     }
@@ -311,10 +411,16 @@ export class Fighter {
   }
 
   takeDamage(amount, knockbackX) {
+    // Armor absorbs the hit without stun (Golem's armorSmash)
+    if (this.armorActive) {
+      this.health -= amount * 0.3; // Still take some chip damage
+      this.health = Math.max(0, this.health);
+      return;
+    }
+
     const isBlocking = this.state === STATES.BLOCK;
 
     if (isBlocking) {
-      // Reduced damage and knockback when blocking
       this.health -= amount * (1 - GAME_CONFIG.BLOCK_DAMAGE_REDUCTION);
       this.body.body.setVelocityX(knockbackX * 0.3);
     } else {
@@ -339,12 +445,14 @@ export class Fighter {
   resetForRound(x) {
     this.body.setPosition(x, GAME_CONFIG.GROUND_Y - GAME_CONFIG.BODY_HEIGHT / 2);
     this.body.body.setVelocity(0, 0);
-    this.health = GAME_CONFIG.MAX_HEALTH;
+    this.health = this.maxHealth;
     this.state = STATES.IDLE;
     this.stateTimer = 0;
     this.specialCooldown = 0;
     this.canAct = true;
     this.hasHit = false;
+    this.specialHitCount = 0;
+    this.armorActive = false;
   }
 
   draw() {

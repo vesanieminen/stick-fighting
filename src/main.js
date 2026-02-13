@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
+import { CharacterSelectScene } from './scenes/CharacterSelectScene.js';
 import { FightScene } from './scenes/FightScene.js';
 import { ResultScene } from './scenes/ResultScene.js';
 
@@ -24,7 +25,7 @@ const config = {
   input: {
     gamepad: true
   },
-  scene: [BootScene, TitleScene, FightScene, ResultScene]
+  scene: [BootScene, TitleScene, CharacterSelectScene, FightScene, ResultScene]
 };
 
 new Phaser.Game(config);
