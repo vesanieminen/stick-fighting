@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 import { Fighter } from '../fighters/Fighter.js';
 import { FIGHTERS } from '../fighters/FighterData.js';
+import { MAPS } from '../maps/MapData.js';
+import { MapRenderer } from '../maps/MapRenderer.js';
 import { InputManager } from '../input/InputManager.js';
 import { HealthBar } from '../ui/HealthBar.js';
 import { RoundIndicator } from '../ui/RoundIndicator.js';
@@ -23,6 +25,13 @@ export class FightScene extends Phaser.Scene {
     this.pauseMenuIndex = 0;
     this.pauseGroup = null;
 
+    // Load selected map
+    const mapIndex = this.registry.get('selectedMap') || 0;
+    this.mapData = MAPS[mapIndex] || MAPS[0];
+    this.hasLava = this.mapData.hazards.some(h => h.type === 'lava');
+    this.lavaDmgTimer1 = 0;
+    this.lavaDmgTimer2 = 0;
+
     this.createArena();
     this.createFighters();
     this.createUI();
@@ -31,48 +40,51 @@ export class FightScene extends Phaser.Scene {
   }
 
   createArena() {
-    const arena = this.add.graphics();
+    const map = this.mapData;
 
-    // Background gradient effect - darker at top, lighter at bottom
-    arena.fillStyle(0x16213e, 1);
-    arena.fillRect(0, 0, 1280, GAME_CONFIG.GROUND_Y);
+    // Use MapRenderer to draw the map
+    this.mapRenderer = new MapRenderer(this, map);
+    this.mapRenderer.draw();
 
-    // Ground
-    arena.fillStyle(0x333344, 1);
-    arena.fillRect(0, GAME_CONFIG.GROUND_Y, 1280, 100);
-
-    // Ground line
-    arena.lineStyle(3, 0x555577, 1);
-    arena.lineBetween(0, GAME_CONFIG.GROUND_Y, 1280, GAME_CONFIG.GROUND_Y);
-
-    // Stage boundaries (subtle vertical lines)
-    arena.lineStyle(1, 0x333355, 0.5);
-    arena.lineBetween(GAME_CONFIG.STAGE_LEFT, 0, GAME_CONFIG.STAGE_LEFT, GAME_CONFIG.GROUND_Y);
-    arena.lineBetween(GAME_CONFIG.STAGE_RIGHT, 0, GAME_CONFIG.STAGE_RIGHT, GAME_CONFIG.GROUND_Y);
-
-    // Set physics world bounds
+    // Set physics world bounds using map data
     this.physics.world.setBounds(
-      GAME_CONFIG.STAGE_LEFT, 0,
-      GAME_CONFIG.STAGE_RIGHT - GAME_CONFIG.STAGE_LEFT,
-      GAME_CONFIG.GROUND_Y
+      map.stageLeft, 0,
+      map.stageRight - map.stageLeft,
+      map.groundY
     );
 
     // Ground collider (static body)
-    this.ground = this.add.zone(640, GAME_CONFIG.GROUND_Y + 10, 1280, 20);
-    this.physics.add.existing(this.ground, true); // true = static
+    this.ground = this.add.zone(640, map.groundY + 10, 1280, 20);
+    this.physics.add.existing(this.ground, true);
+
+    // Platform colliders (one-way: can jump through from below, land on top)
+    this.platformBodies = [];
+    for (const p of map.platforms) {
+      const zone = this.add.zone(p.x + p.width / 2, p.y + p.height / 2, p.width, p.height);
+      this.physics.add.existing(zone, true);
+      // Disable side and bottom collisions for one-way platforms
+      zone.body.checkCollision.down = false;
+      zone.body.checkCollision.left = false;
+      zone.body.checkCollision.right = false;
+      this.platformBodies.push(zone);
+    }
   }
 
   createFighters() {
-    const p1X = 350;
-    const p2X = 930;
+    const map = this.mapData;
+    const p1X = map.p1SpawnX;
+    const p2X = map.p2SpawnX;
 
     const p1Data = FIGHTERS[this.registry.get('p1Fighter') || 0];
     const p2Data = FIGHTERS[this.registry.get('p2Fighter') || 1];
     this.p1Data = p1Data;
     this.p2Data = p2Data;
 
-    this.fighter1 = new Fighter(this, p1X, GAME_CONFIG.GROUND_Y, 0, true, p1Data);
-    this.fighter2 = new Fighter(this, p2X, GAME_CONFIG.GROUND_Y, 1, false, p2Data);
+    const p1Y = map.p1SpawnY ?? map.groundY;
+    const p2Y = map.p2SpawnY ?? map.groundY;
+
+    this.fighter1 = new Fighter(this, p1X, p1Y, 0, true, p1Data);
+    this.fighter2 = new Fighter(this, p2X, p2Y, 1, false, p2Data);
 
     // Cross-reference for teleport special
     this.fighter1.opponent = this.fighter2;
@@ -81,6 +93,12 @@ export class FightScene extends Phaser.Scene {
     // Ground collision
     this.physics.add.collider(this.fighter1.body, this.ground);
     this.physics.add.collider(this.fighter2.body, this.ground);
+
+    // Platform collisions for both fighters
+    for (const plat of this.platformBodies) {
+      this.physics.add.collider(this.fighter1.body, plat);
+      this.physics.add.collider(this.fighter2.body, plat);
+    }
 
     // Fighter-to-fighter collision (they push each other)
     this.physics.add.collider(this.fighter1.body, this.fighter2.body);
@@ -198,10 +216,10 @@ export class FightScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.pauseGroup.add(title);
 
-    // Menu options
-    const options = ['Resume', 'Restart Match', 'Character Select'];
-    const startY = 330;
-    const spacing = 55;
+    // Menu options — includes Map Select
+    const options = ['Resume', 'Restart Match', 'Map Select', 'Character Select'];
+    const startY = 310;
+    const spacing = 50;
 
     this.pauseMenuTexts = options.map((label, i) => {
       const text = this.add.text(640, startY + i * spacing, label, {
@@ -346,7 +364,12 @@ export class FightScene extends Phaser.Scene {
         this.cleanUp();
         this.scene.restart();
         break;
-      case 2: // Character Select
+      case 2: // Map Select
+        this.resumeGame();
+        this.cleanUp();
+        this.scene.start('MapSelectScene');
+        break;
+      case 3: // Character Select
         this.resumeGame();
         this.cleanUp();
         this.scene.start('CharacterSelectScene');
@@ -390,6 +413,11 @@ export class FightScene extends Phaser.Scene {
       return;
     }
 
+    // Update animated map elements (lava, etc.)
+    if (this.mapRenderer) {
+      this.mapRenderer.update(time);
+    }
+
     // Always update UI
     this.p1HealthBar.update(this.fighter1.health, this.fighter1.maxHealth);
     this.p2HealthBar.update(this.fighter2.health, this.fighter2.maxHealth);
@@ -413,6 +441,12 @@ export class FightScene extends Phaser.Scene {
     // Keep fighters facing each other
     this.updateFacing();
 
+    // Lava damage
+    if (this.hasLava) {
+      this.checkLavaDamage(this.fighter1, delta, 1);
+      this.checkLavaDamage(this.fighter2, delta, 2);
+    }
+
     // Hit detection
     this.checkHits(this.fighter1, this.fighter2);
     this.checkHits(this.fighter2, this.fighter1);
@@ -423,6 +457,57 @@ export class FightScene extends Phaser.Scene {
     } else if (this.fighter2.health <= 0 && this.fighter2.state === 'KO') {
       this.endRound(0); // P1 wins
     }
+  }
+
+  checkLavaDamage(fighter, delta, playerNum) {
+    // Fighter feet position = body center Y + half height
+    const feetY = fighter.body.y + GAME_CONFIG.BODY_HEIGHT / 2;
+    const lavaY = this.mapData.groundY;
+
+    // If feet are at or below lava surface (within 10px tolerance)
+    if (feetY < lavaY - 10) return;
+    if (fighter.state === 'KO') return;
+
+    // Tick damage every 300ms
+    const timerKey = playerNum === 1 ? 'lavaDmgTimer1' : 'lavaDmgTimer2';
+    this[timerKey] += delta;
+    if (this[timerKey] < 300) return;
+    this[timerKey] = 0;
+
+    // 5 damage per tick, small upward bounce to let them escape
+    const dmg = 5;
+    fighter.health -= dmg;
+    fighter.health = Math.max(0, fighter.health);
+    fighter.body.body.setVelocityY(-300);
+
+    // Fire visual feedback
+    this.createLavaSpark(fighter.body.x, lavaY);
+
+    // Screen shake
+    this.cameras.main.shake(80, 0.003);
+    SoundManager.hit();
+
+    if (fighter.health <= 0) {
+      fighter.enterState('KO');
+      fighter.canAct = false;
+    }
+  }
+
+  createLavaSpark(x, y) {
+    const g = this.add.graphics().setDepth(50);
+    for (let i = 0; i < 6; i++) {
+      const angle = -Math.PI * (0.1 + Math.random() * 0.8);
+      const len = 10 + Math.random() * 15;
+      const color = [0xff2200, 0xff6600, 0xffcc00][i % 3];
+      g.lineStyle(2, color, 1);
+      g.lineBetween(x, y, x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+    }
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => g.destroy()
+    });
   }
 
   updateFacing() {
@@ -564,5 +649,9 @@ export class FightScene extends Phaser.Scene {
     this.p2HealthBar.destroy();
     this.p1RoundInd.destroy();
     this.p2RoundInd.destroy();
+    if (this.mapRenderer) {
+      this.mapRenderer.destroy();
+      this.mapRenderer = null;
+    }
   }
 }

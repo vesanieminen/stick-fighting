@@ -484,9 +484,6 @@ export class CharacterSelectScene extends Phaser.Scene {
   startFight() {
     this.registry.set('p1Fighter', this.p1Index);
     this.registry.set('p2Fighter', this.p2Index);
-    this.registry.set('p1Wins', 0);
-    this.registry.set('p2Wins', 0);
-    this.registry.set('currentRound', 1);
-    this.scene.start('FightScene');
+    this.scene.start('MapSelectScene');
   }
 }
