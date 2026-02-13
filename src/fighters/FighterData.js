@@ -17,6 +17,7 @@ export const FIGHTERS = [
     specialRange: 100,
     specialType: 'lunge',
     specialName: 'Dash Strike',
+    specialDuration: 500,
   },
   {
     id: 'titan',
@@ -33,6 +34,7 @@ export const FIGHTERS = [
     specialRange: 120,
     specialType: 'groundPound',
     specialName: 'Ground Pound',
+    specialDuration: 900,
   },
   {
     id: 'shadow',
@@ -49,6 +51,7 @@ export const FIGHTERS = [
     specialRange: 60,
     specialType: 'teleport',
     specialName: 'Shadow Step',
+    specialDuration: 550,
     maxHealth: 80,
   },
   {
@@ -66,6 +69,7 @@ export const FIGHTERS = [
     specialRange: 70,
     specialType: 'uppercut',
     specialName: 'Fire Uppercut',
+    specialDuration: 650,
   },
   {
     id: 'frost',
@@ -82,6 +86,7 @@ export const FIGHTERS = [
     specialRange: 130,
     specialType: 'slide',
     specialName: 'Ice Slide',
+    specialDuration: 550,
   },
   {
     id: 'thunder',
@@ -98,6 +103,7 @@ export const FIGHTERS = [
     specialRange: 90,
     specialType: 'lightningDrop',
     specialName: 'Lightning Drop',
+    specialDuration: 800,
   },
   {
     id: 'viper',
@@ -115,6 +121,7 @@ export const FIGHTERS = [
     specialType: 'flurry',
     specialName: 'Viper Flurry',
     specialHits: 4,
+    specialDuration: 700,
   },
   {
     id: 'golem',
@@ -131,6 +138,7 @@ export const FIGHTERS = [
     specialRange: 90,
     specialType: 'armorSmash',
     specialName: 'Armor Smash',
+    specialDuration: 800,
     maxHealth: 120,
   },
   {
@@ -148,6 +156,7 @@ export const FIGHTERS = [
     specialRange: 110,
     specialType: 'whirlwind',
     specialName: 'Whirlwind',
+    specialDuration: 650,
   },
   {
     id: 'nova',
@@ -164,6 +173,7 @@ export const FIGHTERS = [
     specialRange: 140,
     specialType: 'explosion',
     specialName: 'Nova Burst',
+    specialDuration: 700,
     maxHealth: 70,
   },
 ];

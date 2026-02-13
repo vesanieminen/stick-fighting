@@ -163,4 +163,114 @@ export const SoundManager = {
   whoosh() {
     playNoise(0.1, 0.04);
   },
+
+  boom() {
+    const ac = getContext();
+    // Deep explosion
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 60;
+    osc.frequency.exponentialRampToValueAtTime(20, ac.currentTime + 0.4);
+    gain.gain.value = 0.25;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime + 0.4);
+    playNoise(0.3, 0.18);
+  },
+
+  warp() {
+    const ac = getContext();
+    // Quick pitch-shift warp
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 800;
+    osc.frequency.exponentialRampToValueAtTime(100, ac.currentTime + 0.15);
+    gain.gain.value = 0.1;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime + 0.15);
+    // Reappear
+    setTimeout(() => {
+      const osc2 = ac.createOscillator();
+      const gain2 = ac.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = 100;
+      osc2.frequency.exponentialRampToValueAtTime(600, ac.currentTime + 0.1);
+      gain2.gain.value = 0.1;
+      gain2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.12);
+      osc2.connect(gain2);
+      gain2.connect(ac.destination);
+      osc2.start(ac.currentTime);
+      osc2.stop(ac.currentTime + 0.12);
+    }, 100);
+  },
+
+  electric() {
+    const ac = getContext();
+    // Crackling electric sound
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 800 + Math.random() * 1200;
+        gain.gain.value = 0.06;
+        gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(ac.currentTime);
+        osc.stop(ac.currentTime + 0.05);
+      }, i * 30);
+    }
+    playNoise(0.12, 0.08);
+  },
+
+  heavyImpact() {
+    playTone(50, 0.2, 'sine', 0.25);
+    playTone(100, 0.15, 'square', 0.12);
+    playNoise(0.12, 0.15);
+  },
+
+  iceSlide() {
+    const ac = getContext();
+    // Crystalline sliding sound
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = 1200;
+    osc.frequency.exponentialRampToValueAtTime(400, ac.currentTime + 0.2);
+    gain.gain.value = 0.06;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime + 0.25);
+    playNoise(0.15, 0.04);
+  },
+
+  flurryHit() {
+    playTone(300 + Math.random() * 200, 0.04, 'square', 0.08);
+    playNoise(0.03, 0.06);
+  },
+
+  risingAttack() {
+    const ac = getContext();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 200;
+    osc.frequency.exponentialRampToValueAtTime(800, ac.currentTime + 0.15);
+    gain.gain.value = 0.1;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime + 0.2);
+  },
 };

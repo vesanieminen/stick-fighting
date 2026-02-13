@@ -3,6 +3,13 @@ import { GAME_CONFIG } from '../config.js';
 import { POSES, lerpPose } from './FighterAnimations.js';
 import { StickFigureRenderer } from './StickFigureRenderer.js';
 import { SoundManager } from '../audio/SoundManager.js';
+import {
+  spawnSpeedLines, spawnDustPuff, spawnShockwave, spawnFireParticles,
+  spawnFireTrail, spawnIceTrail, spawnIceCrystals, spawnLightningBolt,
+  spawnElectricSparks, spawnSlashMark, spawnArmorGlow, spawnWhirlwindArcs,
+  spawnChargingAura, spawnExplosionRing, spawnSmokePuff, spawnTeleportFlash,
+  spawnGroundCrack,
+} from '../effects/SpecialEffects.js';
 
 const STATES = {
   IDLE: 'IDLE',
@@ -35,6 +42,8 @@ export class Fighter {
     this.hasHit = false; // Prevents same attack hitting twice
     this.specialHitCount = 0; // For multi-hit specials (flurry)
     this.armorActive = false; // For armor smash
+    this._effectPhase = 0; // Tracks which one-shot effects have fired
+    this._effectTimer = 0; // Timer for periodic effects
 
     // Physics body using a zone (no texture needed)
     // Place zone so its center is at the right height (body bottom at ground)
@@ -57,6 +66,7 @@ export class Fighter {
   get x() { return this.body.x; }
   get y() { return this.body.y; }
   get isGrounded() { return this.body.body.blocked.down; }
+  get specialDuration() { return this.data.specialDuration || GAME_CONFIG.SPECIAL_DURATION; }
 
   update(delta, input) {
     this.stateTimer += delta;
@@ -167,11 +177,13 @@ export class Fighter {
 
       case STATES.SPECIAL:
         this.updateSpecial(delta);
-        if (this.stateTimer >= GAME_CONFIG.SPECIAL_DURATION) {
+        if (this.stateTimer >= this.specialDuration) {
           this.canAct = true;
           this.hasHit = false;
           this.specialHitCount = 0;
           this.armorActive = false;
+          this._effectPhase = 0;
+          this._effectTimer = 0;
           this.body.body.setVelocityX(0);
           this.enterState(STATES.IDLE);
         }
@@ -205,101 +217,227 @@ export class Fighter {
 
   updateSpecial(delta) {
     const t = this.stateTimer;
-    const dur = GAME_CONFIG.SPECIAL_DURATION;
+    const dur = this.specialDuration;
     const dir = this.facingRight ? 1 : -1;
+    const bh = GAME_CONFIG.BODY_HEIGHT;
+    const footY = this.y + bh / 2;
+
+    // Periodic effect timer
+    this._effectTimer += delta;
 
     switch (this.data.specialType) {
       case 'lunge':
         // Dash forward during active frames
-        if (t > dur * 0.2 && t < dur * 0.6) {
-          this.body.body.setVelocityX(dir * 500);
+        if (t > dur * 0.2 && t < dur * 0.7) {
+          this.body.body.setVelocityX(dir * 550);
+          // Periodic speed lines
+          if (this._effectTimer > 50) {
+            this._effectTimer = 0;
+            spawnSpeedLines(this.scene, this.x, this.y, dir, this.data.color, 4);
+          }
+        }
+        // Dust puff at start
+        if (this._effectPhase < 1 && t > dur * 0.15) {
+          this._effectPhase = 1;
+          spawnDustPuff(this.scene, this.x - dir * 20, footY);
+          SoundManager.whoosh();
         }
         break;
 
       case 'groundPound':
-        // Jump up, then slam down
-        if (t > dur * 0.1 && t < dur * 0.3) {
-          this.body.body.setVelocityY(-500);
-        } else if (t > dur * 0.4 && t < dur * 0.6) {
-          this.body.body.setVelocityY(800);
+        // Jump up phase
+        if (t > dur * 0.05 && t < dur * 0.3) {
+          this.body.body.setVelocityY(-600);
+        }
+        // Slam down phase
+        if (t > dur * 0.4 && t < dur * 0.65) {
+          this.body.body.setVelocityY(1000);
+          this.body.body.setVelocityX(0);
+        }
+        // Dust at takeoff
+        if (this._effectPhase < 1 && t > dur * 0.05) {
+          this._effectPhase = 1;
+          spawnDustPuff(this.scene, this.x, footY, 0x888888);
+        }
+        // Impact effects on landing
+        if (this._effectPhase < 2 && t > dur * 0.55 && this.isGrounded) {
+          this._effectPhase = 2;
+          spawnShockwave(this.scene, this.x, footY, this.data.color, 100);
+          spawnGroundCrack(this.scene, this.x, footY);
+          spawnDustPuff(this.scene, this.x - 30, footY, 0x666666);
+          spawnDustPuff(this.scene, this.x + 30, footY, 0x666666);
+          this.scene.cameras.main.shake(250, 0.02);
+          SoundManager.heavyImpact();
         }
         break;
 
       case 'teleport':
-        // Teleport behind opponent at the active frame
+        // Smoke at origin before teleport
+        if (this._effectPhase < 1 && t > dur * 0.15) {
+          this._effectPhase = 1;
+          spawnSmokePuff(this.scene, this.x, this.y, this.data.color);
+          SoundManager.warp();
+        }
+        // Teleport behind opponent
         if (t > dur * 0.3 && t < dur * 0.35 && this.opponent) {
-          const behindX = this.opponent.x + (this.opponent.facingRight ? -60 : 60);
+          const behindX = this.opponent.x + (this.opponent.facingRight ? -70 : 70);
           this.body.setPosition(
             Phaser.Math.Clamp(behindX, GAME_CONFIG.STAGE_LEFT + 30, GAME_CONFIG.STAGE_RIGHT - 30),
             this.body.y
           );
         }
+        // Flash at destination
+        if (this._effectPhase < 2 && t > dur * 0.35) {
+          this._effectPhase = 2;
+          spawnTeleportFlash(this.scene, this.x, this.y, this.data.color);
+        }
         break;
 
       case 'uppercut':
         // Launch upward with hit
-        if (t > dur * 0.2 && t < dur * 0.4) {
-          this.body.body.setVelocityY(-600);
-          this.body.body.setVelocityX(dir * 150);
+        if (t > dur * 0.2 && t < dur * 0.5) {
+          this.body.body.setVelocityY(-700);
+          this.body.body.setVelocityX(dir * 180);
+          // Fire trail
+          if (this._effectTimer > 40) {
+            this._effectTimer = 0;
+            spawnFireTrail(this.scene, this.x, this.y + 20, dir, this.data.color);
+          }
+        }
+        // Fire burst at start
+        if (this._effectPhase < 1 && t > dur * 0.15) {
+          this._effectPhase = 1;
+          spawnFireParticles(this.scene, this.x + dir * 20, this.y, this.data.color, 10);
+          SoundManager.risingAttack();
         }
         break;
 
       case 'slide':
-        // Low slide along the ground
-        if (t > dur * 0.15 && t < dur * 0.65) {
-          this.body.body.setVelocityX(dir * 550);
+        // Slide along the ground
+        if (t > dur * 0.15 && t < dur * 0.7) {
+          this.body.body.setVelocityX(dir * 600);
+          // Ice trail
+          if (this._effectTimer > 60) {
+            this._effectTimer = 0;
+            spawnIceTrail(this.scene, this.x, footY, dir, this.data.color);
+          }
+        }
+        // Ice burst at start
+        if (this._effectPhase < 1 && t > dur * 0.1) {
+          this._effectPhase = 1;
+          spawnIceCrystals(this.scene, this.x, footY, this.data.color);
+          SoundManager.iceSlide();
         }
         break;
 
       case 'lightningDrop':
-        // Hop up, then slam straight down
+        // Hop up
         if (t < dur * 0.25) {
-          this.body.body.setVelocityY(-600);
-          this.body.body.setVelocityX(dir * 100);
-        } else if (t > dur * 0.35 && t < dur * 0.6) {
-          this.body.body.setVelocityY(900);
+          this.body.body.setVelocityY(-700);
+          this.body.body.setVelocityX(dir * 120);
+          // Electric sparks while rising
+          if (this._effectTimer > 60) {
+            this._effectTimer = 0;
+            spawnElectricSparks(this.scene, this.x, this.y, this.data.color, 4);
+          }
+        }
+        // Slam down
+        if (t > dur * 0.35 && t < dur * 0.65) {
+          this.body.body.setVelocityY(1000);
           this.body.body.setVelocityX(0);
+        }
+        // Lightning bolt + sparks on impact
+        if (this._effectPhase < 1 && t > dur * 0.5 && this.isGrounded) {
+          this._effectPhase = 1;
+          spawnLightningBolt(this.scene, this.x, 0, this.x, footY, this.data.color);
+          spawnElectricSparks(this.scene, this.x, footY, this.data.color, 12);
+          spawnShockwave(this.scene, this.x, footY, this.data.color, 60);
+          this.scene.cameras.main.shake(150, 0.012);
+          SoundManager.electric();
         }
         break;
 
       case 'flurry':
         // Rapid multi-hit: reset hasHit periodically
-        if (t > dur * 0.15 && t < dur * 0.75) {
-          this.body.body.setVelocityX(dir * 300);
-          const hitInterval = (dur * 0.6) / (this.data.specialHits || 4);
-          const elapsed = t - dur * 0.15;
+        if (t > dur * 0.12 && t < dur * 0.8) {
+          this.body.body.setVelocityX(dir * 280);
+          const hitInterval = (dur * 0.68) / (this.data.specialHits || 4);
+          const elapsed = t - dur * 0.12;
           const hitNum = Math.floor(elapsed / hitInterval);
           if (hitNum > this.specialHitCount) {
             this.specialHitCount = hitNum;
             this.hasHit = false; // Allow next hit
+            // Slash mark per hit
+            spawnSlashMark(this.scene, this.x, this.y, dir, this.data.color);
+            SoundManager.flurryHit();
           }
         }
         break;
 
       case 'armorSmash':
-        // Armor active during windup, then big hit
+        // Armor active during windup
         if (t < dur * 0.5) {
           this.armorActive = true;
+          // Pulsing armor glow
+          if (this._effectTimer > 100) {
+            this._effectTimer = 0;
+            spawnArmorGlow(this.scene, this.x, this.y, this.data.color, 45);
+          }
         } else {
           this.armorActive = false;
         }
-        if (t > dur * 0.4 && t < dur * 0.6) {
-          this.body.body.setVelocityX(dir * 350);
+        // Forward smash
+        if (t > dur * 0.45 && t < dur * 0.65) {
+          this.body.body.setVelocityX(dir * 400);
+        }
+        // Impact effects
+        if (this._effectPhase < 1 && t > dur * 0.5) {
+          this._effectPhase = 1;
+          spawnGroundCrack(this.scene, this.x + dir * 40, footY, this.data.color);
+          spawnDustPuff(this.scene, this.x + dir * 40, footY, 0x888888);
+          this.scene.cameras.main.shake(150, 0.01);
+          SoundManager.heavyImpact();
         }
         break;
 
       case 'whirlwind':
-        // Spin in place with wide range
-        if (t > dur * 0.15 && t < dur * 0.7) {
-          this.body.body.setVelocityX(dir * 200);
+        // Spin with wide range — slight forward movement
+        if (t > dur * 0.1 && t < dur * 0.75) {
+          this.body.body.setVelocityX(dir * 180);
+          // Spinning arcs
+          if (this._effectTimer > 50) {
+            this._effectTimer = 0;
+            const rotation = (t / dur) * Math.PI * 8;
+            spawnWhirlwindArcs(this.scene, this.x, this.y, rotation, this.data.color);
+          }
+        }
+        // Initial whoosh
+        if (this._effectPhase < 1 && t > dur * 0.1) {
+          this._effectPhase = 1;
+          SoundManager.whoosh();
         }
         break;
 
       case 'explosion':
-        // Charge then explode in all directions (big range)
-        if (t > dur * 0.5 && t < dur * 0.6) {
-          // Small knockback on self
-          this.body.body.setVelocityX(-dir * 100);
+        // Charge phase — growing aura
+        if (t < dur * 0.55) {
+          this.body.body.setVelocityX(0); // Stand still while charging
+          const chargeProgress = t / (dur * 0.55);
+          if (this._effectTimer > 60) {
+            this._effectTimer = 0;
+            spawnChargingAura(this.scene, this.x, this.y, this.data.color, 10 + chargeProgress * 35);
+          }
+        }
+        // Explosion burst
+        if (this._effectPhase < 1 && t > dur * 0.55) {
+          this._effectPhase = 1;
+          spawnExplosionRing(this.scene, this.x, this.y, this.data.color, 130);
+          this.scene.cameras.main.shake(300, 0.025);
+          SoundManager.boom();
+        }
+        // Self-knockback after explosion
+        if (t > dur * 0.6 && t < dur * 0.7) {
+          this.body.body.setVelocityX(-dir * 150);
         }
         break;
     }
@@ -322,6 +460,11 @@ export class Fighter {
     if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL].includes(newState)) {
       this.canAct = false;
       this.hasHit = false;
+    }
+
+    if (newState === STATES.SPECIAL) {
+      this._effectPhase = 0;
+      this._effectTimer = 0;
     }
 
     if (newState === STATES.HIT) {
@@ -349,9 +492,21 @@ export class Fighter {
         activeEnd = duration * 0.6;
         break;
       case STATES.SPECIAL:
-        duration = GAME_CONFIG.SPECIAL_DURATION;
-        activeStart = duration * 0.2;
-        activeEnd = duration * 0.6;
+        duration = this.specialDuration;
+        // Per-type active frame windows
+        switch (this.data.specialType) {
+          case 'lunge':        activeStart = duration * 0.25; activeEnd = duration * 0.65; break;
+          case 'groundPound':  activeStart = duration * 0.50; activeEnd = duration * 0.70; break;
+          case 'teleport':     activeStart = duration * 0.40; activeEnd = duration * 0.70; break;
+          case 'uppercut':     activeStart = duration * 0.20; activeEnd = duration * 0.50; break;
+          case 'slide':        activeStart = duration * 0.20; activeEnd = duration * 0.70; break;
+          case 'lightningDrop':activeStart = duration * 0.45; activeEnd = duration * 0.65; break;
+          case 'flurry':       activeStart = duration * 0.12; activeEnd = duration * 0.80; break;
+          case 'armorSmash':   activeStart = duration * 0.50; activeEnd = duration * 0.70; break;
+          case 'whirlwind':    activeStart = duration * 0.12; activeEnd = duration * 0.75; break;
+          case 'explosion':    activeStart = duration * 0.55; activeEnd = duration * 0.75; break;
+          default:             activeStart = duration * 0.20; activeEnd = duration * 0.60;
+        }
         break;
       default:
         return false;
@@ -391,9 +546,33 @@ export class Fighter {
 
     const dir = this.facingRight ? 1 : -1;
     const bx = this.x;
-    // Center of body vertically
     const by = this.y;
 
+    // Special moves with area-of-effect hitboxes (hit both sides)
+    if (this.state === STATES.SPECIAL) {
+      switch (this.data.specialType) {
+        case 'explosion':
+          // Large circle-like area centered on fighter
+          return new Phaser.Geom.Rectangle(
+            bx - attack.range / 2, by - attack.range / 3,
+            attack.range, attack.range * 0.66
+          );
+        case 'groundPound':
+          // Wide area on ground around fighter
+          return new Phaser.Geom.Rectangle(
+            bx - attack.range / 2, by - 20,
+            attack.range, 60
+          );
+        case 'whirlwind':
+          // Wide spin area around fighter
+          return new Phaser.Geom.Rectangle(
+            bx - attack.range / 2, by - 30,
+            attack.range, 60
+          );
+      }
+    }
+
+    // Standard forward-facing hitbox (punch, kick, and forward specials)
     const hbX = dir > 0
       ? bx + GAME_CONFIG.BODY_WIDTH / 2
       : bx - GAME_CONFIG.BODY_WIDTH / 2 - attack.range;
@@ -453,6 +632,8 @@ export class Fighter {
     this.hasHit = false;
     this.specialHitCount = 0;
     this.armorActive = false;
+    this._effectPhase = 0;
+    this._effectTimer = 0;
   }
 
   draw() {
@@ -470,7 +651,7 @@ export class Fighter {
       switch (this.state) {
         case STATES.PUNCH: totalDuration = GAME_CONFIG.PUNCH_DURATION; break;
         case STATES.KICK: totalDuration = GAME_CONFIG.KICK_DURATION; break;
-        case STATES.SPECIAL: totalDuration = GAME_CONFIG.SPECIAL_DURATION; break;
+        case STATES.SPECIAL: totalDuration = this.specialDuration; break;
         case STATES.KO: totalDuration = 800; break;
         default: totalDuration = 400; break; // Walk cycle, idle bob
       }
