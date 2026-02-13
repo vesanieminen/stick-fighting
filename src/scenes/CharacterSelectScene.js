@@ -113,20 +113,9 @@ export class CharacterSelectScene extends Phaser.Scene {
       cancel: this.input.keyboard.addKey('PERIOD'),
     };
 
-    // Gamepad tracking
-    this.p1Pad = null;
-    this.p2Pad = null;
+    // Gamepad tracking — look up pads dynamically each frame
     this.p1PadPrev = {};
     this.p2PadPrev = {};
-
-    if (this.input.gamepad) {
-      this.input.gamepad.on('connected', (pad) => {
-        if (pad.index === 0 && !this.p1Pad) this.p1Pad = pad;
-        if (pad.index === 1 && !this.p2Pad) this.p2Pad = pad;
-      });
-      if (this.input.gamepad.pad1) this.p1Pad = this.input.gamepad.pad1;
-      if (this.input.gamepad.pad2) this.p2Pad = this.input.gamepad.pad2;
-    }
 
     this.updateDisplay();
   }
@@ -177,17 +166,29 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.updatePadPrev();
   }
 
+  getPad(player) {
+    if (!this.input.gamepad) return null;
+    // Look up pad dynamically each frame — handles hot-plug and browser activation
+    const pads = this.input.gamepad.gamepads.filter(p => p && p.connected);
+    const idx = player - 1; // player 1 → pad index 0, player 2 → pad index 1
+    return pads.find(p => p.index === idx) || null;
+  }
+
   padJustPressed(player, button) {
-    const pad = player === 1 ? this.p1Pad : this.p2Pad;
+    const pad = this.getPad(player);
     const prev = player === 1 ? this.p1PadPrev : this.p2PadPrev;
-    if (!pad || !pad.connected) return false;
+    if (!pad) return false;
+
+    const DEADZONE = 0.5;
+    const stickX = pad.leftStick ? pad.leftStick.x : 0;
+    const stickY = pad.leftStick ? pad.leftStick.y : 0;
 
     let current = false;
     switch (button) {
-      case 'left': current = pad.left; break;
-      case 'right': current = pad.right; break;
-      case 'up': current = pad.up; break;
-      case 'down': current = pad.down; break;
+      case 'left': current = pad.left || stickX < -DEADZONE; break;
+      case 'right': current = pad.right || stickX > DEADZONE; break;
+      case 'up': current = pad.up || stickY < -DEADZONE; break;
+      case 'down': current = pad.down || stickY > DEADZONE; break;
       case 'A': current = pad.A; break;
       case 'B': current = pad.B; break;
     }
@@ -195,12 +196,19 @@ export class CharacterSelectScene extends Phaser.Scene {
   }
 
   updatePadPrev() {
-    for (const [pad, prev] of [[this.p1Pad, this.p1PadPrev], [this.p2Pad, this.p2PadPrev]]) {
-      if (!pad || !pad.connected) continue;
-      prev.left = pad.left;
-      prev.right = pad.right;
-      prev.up = pad.up;
-      prev.down = pad.down;
+    for (const player of [1, 2]) {
+      const pad = this.getPad(player);
+      const prev = player === 1 ? this.p1PadPrev : this.p2PadPrev;
+      if (!pad) continue;
+
+      const DEADZONE = 0.5;
+      const stickX = pad.leftStick ? pad.leftStick.x : 0;
+      const stickY = pad.leftStick ? pad.leftStick.y : 0;
+
+      prev.left = pad.left || stickX < -DEADZONE;
+      prev.right = pad.right || stickX > DEADZONE;
+      prev.up = pad.up || stickY < -DEADZONE;
+      prev.down = pad.down || stickY > DEADZONE;
       prev.A = pad.A;
       prev.B = pad.B;
     }
