@@ -7,9 +7,9 @@ import { SoundManager } from '../audio/SoundManager.js';
 const COLS = 5;
 const ROWS = 2;
 const CELL_W = 200;
-const CELL_H = 180;
+const CELL_H = 190;
 const GRID_X = 140; // left edge of grid
-const GRID_Y = 120; // top edge of grid
+const GRID_Y = 105; // top edge of grid
 
 export class CharacterSelectScene extends Phaser.Scene {
   constructor() {
@@ -47,15 +47,30 @@ export class CharacterSelectScene extends Phaser.Scene {
       this.cellGraphics.push(g);
 
       // Character name
-      const nameText = this.add.text(cx, cy + 50, fighter.name, {
+      const nameText = this.add.text(cx, cy + CELL_H / 2 - 18, fighter.name, {
         fontSize: '14px', fontFamily: 'monospace', color: '#aaaaaa'
       }).setOrigin(0.5);
       this.cellTexts.push(nameText);
 
-      // Stick figure preview
+      // Stick figure preview in SPECIAL pose (frame 2 = peak)
       const figG = this.add.graphics();
       const renderer = new StickFigureRenderer(figG);
-      renderer.draw(cx, cy + 20, POSES.IDLE[0], true, fighter.color);
+      const scale = 0.7;
+      const specialPose = POSES.SPECIAL[2]; // Peak frame
+      const scaledPose = {};
+      for (const joint in specialPose) {
+        scaledPose[joint] = {
+          x: specialPose[joint].x * scale,
+          y: specialPose[joint].y * scale,
+        };
+      }
+      renderer.draw(cx, cy + 10, scaledPose, true, fighter.color);
+
+      // Special effect decoration behind the figure
+      const fx = this.add.graphics();
+      fx.setDepth(5);
+      figG.setDepth(6);
+      this.drawSpecialDecoration(fx, cx, cy + 10, fighter.specialType, fighter.color);
     }
 
     // Info panel at the bottom
@@ -335,6 +350,134 @@ export class CharacterSelectScene extends Phaser.Scene {
       this.startText.setText('GET READY...');
     } else {
       this.startText.setText('');
+    }
+  }
+
+  drawSpecialDecoration(g, x, y, specialType, color) {
+    const alpha = 0.3;
+
+    switch (specialType) {
+      case 'lunge':
+        // Speed lines behind
+        for (let i = 0; i < 5; i++) {
+          const ly = y - 40 + i * 20;
+          g.lineStyle(2, color, alpha * (0.5 + Math.random() * 0.5));
+          g.lineBetween(x - 50 - Math.random() * 20, ly, x - 20, ly);
+        }
+        break;
+
+      case 'groundPound':
+        // Shockwave arcs on ground
+        g.lineStyle(2, color, alpha);
+        g.beginPath();
+        g.arc(x, y + 42, 35, Math.PI * 0.8, Math.PI * 0.2, true);
+        g.strokePath();
+        g.lineStyle(1.5, color, alpha * 0.6);
+        g.beginPath();
+        g.arc(x, y + 42, 50, Math.PI * 0.85, Math.PI * 0.15, true);
+        g.strokePath();
+        break;
+
+      case 'teleport':
+        // Ghostly afterimage offset
+        g.lineStyle(2, color, 0.15);
+        g.strokeCircle(x - 25, y - 20, 8);
+        g.lineBetween(x - 25, y - 12, x - 25, y + 15);
+        // Sparkle dots
+        for (let i = 0; i < 6; i++) {
+          const sx = x - 30 + Math.random() * 60;
+          const sy = y - 45 + Math.random() * 70;
+          g.fillStyle(color, 0.3 + Math.random() * 0.3);
+          g.fillCircle(sx, sy, 1.5);
+        }
+        break;
+
+      case 'uppercut':
+        // Fire trail upward
+        for (let i = 0; i < 4; i++) {
+          const fy = y + 10 - i * 18;
+          const size = 6 + i * 2;
+          g.fillStyle(color, alpha * (0.4 + i * 0.15));
+          g.fillTriangle(x + 15 - size / 2, fy + size, x + 15 + size / 2, fy + size, x + 15, fy - size);
+        }
+        break;
+
+      case 'slide':
+        // Ice trail behind feet
+        g.lineStyle(2, color, alpha);
+        g.lineBetween(x - 50, y + 42, x + 10, y + 42);
+        // Ice crystals
+        for (let i = 0; i < 3; i++) {
+          const cx2 = x - 40 + i * 18;
+          const cy2 = y + 34;
+          g.lineStyle(1.5, color, alpha * 0.8);
+          g.lineBetween(cx2, cy2, cx2 - 3, cy2 - 8);
+          g.lineBetween(cx2, cy2, cx2 + 3, cy2 - 8);
+          g.lineBetween(cx2, cy2, cx2, cy2 - 10);
+        }
+        break;
+
+      case 'lightningDrop':
+        // Lightning bolt
+        g.lineStyle(2.5, color, alpha * 1.2);
+        g.beginPath();
+        g.moveTo(x + 5, y - 55);
+        g.lineTo(x - 5, y - 30);
+        g.lineTo(x + 8, y - 30);
+        g.lineTo(x - 2, y - 5);
+        g.strokePath();
+        // Sparks
+        for (let i = 0; i < 4; i++) {
+          const sx = x - 10 + Math.random() * 25;
+          const sy = y - 50 + Math.random() * 50;
+          g.fillStyle(color, 0.5);
+          g.fillCircle(sx, sy, 1.5);
+        }
+        break;
+
+      case 'flurry':
+        // Slash marks
+        for (let i = 0; i < 3; i++) {
+          const sx = x + 15 + i * 8;
+          const sy = y - 35 + i * 15;
+          g.lineStyle(2, color, alpha * (0.6 + i * 0.15));
+          g.lineBetween(sx - 8, sy - 10, sx + 8, sy + 10);
+        }
+        break;
+
+      case 'armorSmash':
+        // Glowing armor outline
+        g.lineStyle(2, color, alpha * 0.8);
+        g.strokeCircle(x, y - 20, 32);
+        g.lineStyle(1, color, alpha * 0.4);
+        g.strokeCircle(x, y - 20, 40);
+        break;
+
+      case 'whirlwind':
+        // Spinning arcs around fighter
+        for (let i = 0; i < 3; i++) {
+          const angle = (Math.PI * 2 * i) / 3;
+          const r = 35;
+          g.lineStyle(2, color, alpha * 0.8);
+          g.beginPath();
+          g.arc(x, y - 15, r, angle, angle + 1.2);
+          g.strokePath();
+        }
+        break;
+
+      case 'explosion':
+        // Radiating burst lines
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * 2 * i) / 8;
+          const r1 = 22;
+          const r2 = 38 + (i % 2) * 8;
+          g.lineStyle(2, color, alpha * 0.7);
+          g.lineBetween(
+            x + Math.cos(angle) * r1, y - 15 + Math.sin(angle) * r1,
+            x + Math.cos(angle) * r2, y - 15 + Math.sin(angle) * r2
+          );
+        }
+        break;
     }
   }
 
