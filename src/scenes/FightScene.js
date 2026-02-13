@@ -117,13 +117,25 @@ export class FightScene extends Phaser.Scene {
       fontSize: '13px', fontFamily: 'monospace', color: '#555555'
     }).setOrigin(0.5);
 
-    // Special cooldown indicator (small text near each player)
-    this.p1CooldownText = this.add.text(50, barY + barHeight + 35, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: '#ffcc00'
+    // Special cooldown bars (below round indicators)
+    const spBarW = 80;
+    const spBarH = 6;
+    const spBarY = barY + barHeight + 38;
+    this.spBarConfig = { w: spBarW, h: spBarH };
+
+    this.add.text(50, spBarY - 2, 'SP', {
+      fontSize: '9px', fontFamily: 'monospace', color: '#666666'
     });
-    this.p2CooldownText = this.add.text(1230, barY + barHeight + 35, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: '#ffcc00'
+    this.add.text(1230, spBarY - 2, 'SP', {
+      fontSize: '9px', fontFamily: 'monospace', color: '#666666'
     }).setOrigin(1, 0);
+
+    this.p1SpBar = this.add.graphics();
+    this.p1SpBarX = 68;
+    this.p1SpBarY = spBarY;
+    this.p2SpBar = this.add.graphics();
+    this.p2SpBarX = 1230 - spBarW;
+    this.p2SpBarY = spBarY;
 
     // Update UI once
     this.p1HealthBar.update(GAME_CONFIG.MAX_HEALTH, GAME_CONFIG.MAX_HEALTH);
@@ -165,17 +177,9 @@ export class FightScene extends Phaser.Scene {
     this.p1RoundInd.update(this.p1Wins);
     this.p2RoundInd.update(this.p2Wins);
 
-    // Cooldown indicators
-    if (this.fighter1.specialCooldown > 0) {
-      this.p1CooldownText.setText(`Special: ${Math.ceil(this.fighter1.specialCooldown / 1000)}s`);
-    } else {
-      this.p1CooldownText.setText('Special: READY');
-    }
-    if (this.fighter2.specialCooldown > 0) {
-      this.p2CooldownText.setText(`Special: ${Math.ceil(this.fighter2.specialCooldown / 1000)}s`);
-    } else {
-      this.p2CooldownText.setText('Special: READY');
-    }
+    // Special cooldown bars
+    this.drawSpBar(this.p1SpBar, this.p1SpBarX, this.p1SpBarY, this.fighter1.specialCooldown, this.p1Data.color);
+    this.drawSpBar(this.p2SpBar, this.p2SpBarX, this.p2SpBarY, this.fighter2.specialCooldown, this.p2Data.color);
 
     if (!this.roundActive) return;
 
@@ -273,6 +277,23 @@ export class FightScene extends Phaser.Scene {
       duration: 200,
       onComplete: () => g.destroy()
     });
+  }
+
+  drawSpBar(graphics, x, y, cooldown, color) {
+    const { w, h } = this.spBarConfig;
+    const fill = cooldown <= 0 ? 1 : 1 - cooldown / GAME_CONFIG.SPECIAL_COOLDOWN;
+
+    graphics.clear();
+    // Background
+    graphics.fillStyle(0x111122, 0.8);
+    graphics.fillRect(x, y, w, h);
+    // Fill
+    const barColor = fill >= 1 ? 0xffcc00 : color;
+    graphics.fillStyle(barColor, fill >= 1 ? 0.9 : 0.6);
+    graphics.fillRect(x, y, w * fill, h);
+    // Border
+    graphics.lineStyle(1, fill >= 1 ? 0xffcc00 : 0x444466, 0.8);
+    graphics.strokeRect(x, y, w, h);
   }
 
   endRound(winnerIndex) {
