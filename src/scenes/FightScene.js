@@ -232,8 +232,9 @@ export class FightScene extends Phaser.Scene {
 
       defender.takeDamage(attackData.damage, knockDir * attackData.knockback);
 
-      // Sound
+      // Block advantage — punish the attacker for hitting into a block
       if (wasBlocking) {
+        attacker.onAttackBlocked(knockDir);
         SoundManager.block();
       } else {
         SoundManager.hit();

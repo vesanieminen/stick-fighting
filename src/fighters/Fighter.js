@@ -45,6 +45,14 @@ export class Fighter {
     this._effectPhase = 0; // Tracks which one-shot effects have fired
     this._effectTimer = 0; // Timer for periodic effects
 
+    // Attack cooldown — prevents rapid-fire attack spam
+    this.attackCooldown = 0;
+
+    // Stale move tracking — repeated same attacks deal less damage
+    this.lastAttackType = null;
+    this.sameAttackCount = 0;
+    this.timeSinceLastAttack = 0;
+
     // Physics body using a zone (no texture needed)
     // Place zone so its center is at the right height (body bottom at ground)
     this.body = scene.add.zone(x, y - GAME_CONFIG.BODY_HEIGHT / 2, GAME_CONFIG.BODY_WIDTH, GAME_CONFIG.BODY_HEIGHT);
@@ -72,6 +80,13 @@ export class Fighter {
     this.stateTimer += delta;
     this.animTimer += delta;
     this.specialCooldown = Math.max(0, this.specialCooldown - delta);
+    this.attackCooldown = Math.max(0, this.attackCooldown - delta);
+    this.timeSinceLastAttack += delta;
+
+    // Reset stale move counter after inactivity
+    if (this.timeSinceLastAttack > GAME_CONFIG.STALE_MOVE_RESET_TIME) {
+      this.sameAttackCount = 0;
+    }
 
     if (this.canAct && this.state !== STATES.KO && this.state !== STATES.VICTORY) {
       this.handleInput(input);
@@ -88,8 +103,8 @@ export class Fighter {
     const inActionableState = [STATES.IDLE, STATES.WALK_FORWARD, STATES.WALK_BACKWARD, STATES.BLOCK].includes(this.state);
     const inAir = !this.isGrounded;
 
-    // Attack inputs (priority over movement)
-    if (inActionableState || (inAir && this.state === STATES.JUMP)) {
+    // Attack inputs (priority over movement, requires cooldown expired)
+    if ((inActionableState || (inAir && this.state === STATES.JUMP)) && this.attackCooldown <= 0) {
       if (input.special && this.specialCooldown <= 0 && this.isGrounded) {
         this.enterState(STATES.SPECIAL);
         this.specialCooldown = GAME_CONFIG.SPECIAL_COOLDOWN;
@@ -163,6 +178,7 @@ export class Fighter {
         if (this.stateTimer >= GAME_CONFIG.PUNCH_DURATION) {
           this.canAct = true;
           this.hasHit = false;
+          this.attackCooldown = GAME_CONFIG.PUNCH_RECOVERY;
           this.enterState(STATES.IDLE);
         }
         break;
@@ -171,6 +187,7 @@ export class Fighter {
         if (this.stateTimer >= GAME_CONFIG.KICK_DURATION) {
           this.canAct = true;
           this.hasHit = false;
+          this.attackCooldown = GAME_CONFIG.KICK_RECOVERY;
           this.enterState(STATES.IDLE);
         }
         break;
@@ -184,6 +201,7 @@ export class Fighter {
           this.armorActive = false;
           this._effectPhase = 0;
           this._effectTimer = 0;
+          this.attackCooldown = GAME_CONFIG.SPECIAL_RECOVERY;
           this.body.body.setVelocityX(0);
           this.enterState(STATES.IDLE);
         }
@@ -460,6 +478,16 @@ export class Fighter {
     if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL].includes(newState)) {
       this.canAct = false;
       this.hasHit = false;
+
+      // Track stale moves
+      const attackType = newState;
+      if (attackType === this.lastAttackType && this.timeSinceLastAttack < GAME_CONFIG.STALE_MOVE_RESET_TIME) {
+        this.sameAttackCount++;
+      } else {
+        this.sameAttackCount = 1;
+      }
+      this.lastAttackType = attackType;
+      this.timeSinceLastAttack = 0;
     }
 
     if (newState === STATES.SPECIAL) {
@@ -469,6 +497,11 @@ export class Fighter {
 
     if (newState === STATES.HIT) {
       this.canAct = false;
+    }
+
+    // Stop sliding when blocking
+    if (newState === STATES.BLOCK) {
+      this.body.body.setVelocityX(0);
     }
   }
 
@@ -515,23 +548,30 @@ export class Fighter {
     return this.stateTimer >= activeStart && this.stateTimer <= activeEnd;
   }
 
+  getStaleDamageMultiplier() {
+    if (this.sameAttackCount <= 1) return 1;
+    const penalty = GAME_CONFIG.STALE_MOVE_PENALTY * (this.sameAttackCount - 1);
+    return Math.max(GAME_CONFIG.STALE_MOVE_MIN, 1 - penalty);
+  }
+
   getAttackData() {
+    const stale = this.getStaleDamageMultiplier();
     switch (this.state) {
       case STATES.PUNCH:
         return {
-          damage: this.data.punchDamage,
+          damage: Math.round(this.data.punchDamage * stale),
           range: this.data.punchRange,
           knockback: GAME_CONFIG.PUNCH_KNOCKBACK,
         };
       case STATES.KICK:
         return {
-          damage: this.data.kickDamage,
+          damage: Math.round(this.data.kickDamage * stale),
           range: this.data.kickRange,
           knockback: GAME_CONFIG.KICK_KNOCKBACK,
         };
       case STATES.SPECIAL:
         return {
-          damage: this.data.specialDamage,
+          damage: Math.round(this.data.specialDamage * stale),
           range: this.data.specialRange,
           knockback: GAME_CONFIG.SPECIAL_KNOCKBACK,
         };
@@ -617,6 +657,19 @@ export class Fighter {
     }
   }
 
+  onAttackBlocked(knockDir) {
+    // Attacker gets pushed back and stunned when blocked — rewards blocking
+    this.body.body.setVelocityX(-knockDir * GAME_CONFIG.BLOCK_ATTACKER_PUSHBACK);
+    this.attackCooldown = GAME_CONFIG.BLOCK_ATTACKER_STUN;
+    this.canAct = false;
+    // Brief stun then recover
+    this.scene.time.delayedCall(GAME_CONFIG.BLOCK_ATTACKER_STUN, () => {
+      if (this.state !== STATES.KO) {
+        this.canAct = true;
+      }
+    });
+  }
+
   setFacing(facingRight) {
     this.facingRight = facingRight;
   }
@@ -634,6 +687,10 @@ export class Fighter {
     this.armorActive = false;
     this._effectPhase = 0;
     this._effectTimer = 0;
+    this.attackCooldown = 0;
+    this.lastAttackType = null;
+    this.sameAttackCount = 0;
+    this.timeSinceLastAttack = 0;
   }
 
   draw() {

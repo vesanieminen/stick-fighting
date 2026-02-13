@@ -16,7 +16,7 @@ const KEYBOARD_BINDINGS = {
     jump:    'UP',
     punch:   'COMMA',
     kick:    'PERIOD',
-    special: 'FORWARD_SLASH',
+    special: 'MINUS',
     block:   'DOWN',
   }
 };

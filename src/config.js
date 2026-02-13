@@ -30,6 +30,18 @@ export const GAME_CONFIG = {
 
   // Block
   BLOCK_DAMAGE_REDUCTION: 0.8,
+  BLOCK_ATTACKER_PUSHBACK: 250,  // Push attacker back when blocked
+  BLOCK_ATTACKER_STUN: 300,      // Extra recovery on attacker when blocked (ms)
+
+  // Attack recovery (ms cooldown before can attack again)
+  PUNCH_RECOVERY: 180,
+  KICK_RECOVERY: 120,
+  SPECIAL_RECOVERY: 250,
+
+  // Stale move scaling
+  STALE_MOVE_PENALTY: 0.2,    // Damage reduction per repeated use
+  STALE_MOVE_MIN: 0.4,        // Minimum damage multiplier
+  STALE_MOVE_RESET_TIME: 1500, // ms without attacking to reset
 
   // Rounds
   ROUNDS_TO_WIN: 2,
@@ -37,7 +49,7 @@ export const GAME_CONFIG = {
   ROUND_END_DELAY: 2000,
 
   // Hitstun
-  HITSTUN_DURATION: 300,
+  HITSTUN_DURATION: 250,
 
   // Stick figure
   HEAD_RADIUS: 14,

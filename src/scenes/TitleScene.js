@@ -34,7 +34,7 @@ export class TitleScene extends Phaser.Scene {
     renderer2.draw(840, 480, POSES.IDLE[0], false, 0x00ffff);
 
     // Controls info
-    this.add.text(640, 560, 'P1: WASD + J/K/L    P2: Arrows + , . /', {
+    this.add.text(640, 560, 'P1: WASD + J/K/L    P2: Arrows + , . -', {
       fontSize: '16px',
       fontFamily: 'monospace',
       color: '#666666'
