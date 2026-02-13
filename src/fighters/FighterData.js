@@ -1,0 +1,28 @@
+export const FIGHTER_DATA = {
+  balanced: {
+    name: 'Swift',
+    color: 0xffffff,
+    moveSpeed: 300,
+    jumpVelocity: -650,
+    punchDamage: 8,
+    punchRange: 60,
+    kickDamage: 14,
+    kickRange: 80,
+    specialDamage: 22,
+    specialRange: 100,
+    specialType: 'lunge',
+  },
+  heavy: {
+    name: 'Titan',
+    color: 0x00ffff,
+    moveSpeed: 230,
+    jumpVelocity: -550,
+    punchDamage: 10,
+    punchRange: 65,
+    kickDamage: 18,
+    kickRange: 85,
+    specialDamage: 28,
+    specialRange: 110,
+    specialType: 'groundPound',
+  },
+};
