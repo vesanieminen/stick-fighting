@@ -18,9 +18,15 @@ export class FightScene extends Phaser.Scene {
     this.currentRound = this.registry.get('currentRound');
     this.roundActive = false;
 
+    this.gamePaused = false;
+    this.pauseMenuItems = [];
+    this.pauseMenuIndex = 0;
+    this.pauseGroup = null;
+
     this.createArena();
     this.createFighters();
     this.createUI();
+    this.createPauseMenu();
     this.startRound();
   }
 
@@ -144,6 +150,210 @@ export class FightScene extends Phaser.Scene {
     this.p2RoundInd.update(this.p2Wins);
   }
 
+  createPauseMenu() {
+    // ESC key to toggle pause
+    this.escKey = this.input.keyboard.addKey('ESC');
+    this.escKey.on('down', () => {
+      if (this.gamePaused) {
+        this.resumeGame();
+      } else {
+        this.pauseGame();
+      }
+    });
+
+    // Navigation keys (both P1 and P2 keys work in menu)
+    this.pauseUpKeys = [
+      this.input.keyboard.addKey('W'),
+      this.input.keyboard.addKey('UP'),
+    ];
+    this.pauseDownKeys = [
+      this.input.keyboard.addKey('S'),
+      this.input.keyboard.addKey('DOWN'),
+    ];
+    this.pauseConfirmKeys = [
+      this.input.keyboard.addKey('ENTER'),
+      this.input.keyboard.addKey('J'),
+      this.input.keyboard.addKey('COMMA'),
+      this.input.keyboard.addKey('SPACE'),
+    ];
+
+    // Gamepad previous state for edge detection in pause menu
+    this._padPrevStart = [false, false];
+    this._padPrevUp = [false, false];
+    this._padPrevDown = [false, false];
+    this._padPrevA = [false, false];
+
+    // Build the overlay (hidden initially)
+    this.pauseGroup = this.add.container(0, 0).setDepth(500).setVisible(false);
+
+    // Dim overlay
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.7);
+    overlay.fillRect(0, 0, 1280, 720);
+    this.pauseGroup.add(overlay);
+
+    // Title
+    const title = this.add.text(640, 220, 'PAUSED', {
+      fontSize: '56px', fontFamily: 'monospace', color: '#ffffff', fontStyle: 'bold'
+    }).setOrigin(0.5);
+    this.pauseGroup.add(title);
+
+    // Menu options
+    const options = ['Resume', 'Restart Match', 'Character Select'];
+    const startY = 330;
+    const spacing = 55;
+
+    this.pauseMenuTexts = options.map((label, i) => {
+      const text = this.add.text(640, startY + i * spacing, label, {
+        fontSize: '28px', fontFamily: 'monospace', color: '#888888'
+      }).setOrigin(0.5);
+      this.pauseGroup.add(text);
+      return text;
+    });
+
+    // Hint
+    const hint = this.add.text(640, startY + options.length * spacing + 30, 'ESC to resume', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#555555'
+    }).setOrigin(0.5);
+    this.pauseGroup.add(hint);
+  }
+
+  pauseGame() {
+    if (this.gamePaused) return;
+    this.gamePaused = true;
+    this.physics.world.pause();
+    this.pauseMenuIndex = 0;
+    this.updatePauseMenuHighlight();
+    this.pauseGroup.setVisible(true);
+    SoundManager.menuSelect();
+  }
+
+  resumeGame() {
+    if (!this.gamePaused) return;
+    this.gamePaused = false;
+    this.physics.world.resume();
+    this.pauseGroup.setVisible(false);
+  }
+
+  updatePauseMenuHighlight() {
+    this.pauseMenuTexts.forEach((text, i) => {
+      if (i === this.pauseMenuIndex) {
+        text.setColor('#ffcc00');
+        text.setFontSize('32px');
+      } else {
+        text.setColor('#888888');
+        text.setFontSize('28px');
+      }
+    });
+  }
+
+  _getPads() {
+    const pads = [];
+    if (this.input.gamepad) {
+      if (this.input.gamepad.pad1) pads.push(this.input.gamepad.pad1);
+      if (this.input.gamepad.pad2) pads.push(this.input.gamepad.pad2);
+    }
+    return pads;
+  }
+
+  checkGamepadPause() {
+    const pads = this._getPads();
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
+      if (!pad || !pad.connected) continue;
+      // Start button (button index 9) — edge detect
+      const startDown = pad.buttons[9] && pad.buttons[9].pressed;
+      if (startDown && !this._padPrevStart[i]) {
+        this._padPrevStart[i] = true;
+        if (this.gamePaused) {
+          this.resumeGame();
+        } else {
+          this.pauseGame();
+        }
+        return;
+      }
+      if (!startDown) this._padPrevStart[i] = false;
+    }
+  }
+
+  handlePauseInput() {
+    // Keyboard: navigate up
+    for (const key of this.pauseUpKeys) {
+      if (Phaser.Input.Keyboard.JustDown(key)) {
+        this.pauseMenuIndex = (this.pauseMenuIndex - 1 + this.pauseMenuTexts.length) % this.pauseMenuTexts.length;
+        this.updatePauseMenuHighlight();
+        SoundManager.menuSelect();
+        return;
+      }
+    }
+    // Keyboard: navigate down
+    for (const key of this.pauseDownKeys) {
+      if (Phaser.Input.Keyboard.JustDown(key)) {
+        this.pauseMenuIndex = (this.pauseMenuIndex + 1) % this.pauseMenuTexts.length;
+        this.updatePauseMenuHighlight();
+        SoundManager.menuSelect();
+        return;
+      }
+    }
+    // Keyboard: confirm
+    for (const key of this.pauseConfirmKeys) {
+      if (Phaser.Input.Keyboard.JustDown(key)) {
+        this.executePauseOption(this.pauseMenuIndex);
+        return;
+      }
+    }
+
+    // Gamepad: navigate and confirm
+    const pads = this._getPads();
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
+      if (!pad || !pad.connected) continue;
+
+      const upDown = pad.up;
+      const downDown = pad.down;
+      const aDown = pad.A;
+
+      if (upDown && !this._padPrevUp[i]) {
+        this.pauseMenuIndex = (this.pauseMenuIndex - 1 + this.pauseMenuTexts.length) % this.pauseMenuTexts.length;
+        this.updatePauseMenuHighlight();
+        SoundManager.menuSelect();
+      }
+      if (downDown && !this._padPrevDown[i]) {
+        this.pauseMenuIndex = (this.pauseMenuIndex + 1) % this.pauseMenuTexts.length;
+        this.updatePauseMenuHighlight();
+        SoundManager.menuSelect();
+      }
+      if (aDown && !this._padPrevA[i]) {
+        this.executePauseOption(this.pauseMenuIndex);
+      }
+
+      this._padPrevUp[i] = upDown;
+      this._padPrevDown[i] = downDown;
+      this._padPrevA[i] = aDown;
+    }
+  }
+
+  executePauseOption(index) {
+    switch (index) {
+      case 0: // Resume
+        this.resumeGame();
+        break;
+      case 1: // Restart Match
+        this.resumeGame();
+        this.registry.set('p1Wins', 0);
+        this.registry.set('p2Wins', 0);
+        this.registry.set('currentRound', 1);
+        this.cleanUp();
+        this.scene.restart();
+        break;
+      case 2: // Character Select
+        this.resumeGame();
+        this.cleanUp();
+        this.scene.start('CharacterSelectScene');
+        break;
+    }
+  }
+
   startRound() {
     this.roundActive = false;
 
@@ -171,6 +381,15 @@ export class FightScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    // Gamepad Start button toggles pause (must run always)
+    this.checkGamepadPause();
+
+    // Handle pause menu navigation when paused
+    if (this.gamePaused) {
+      this.handlePauseInput();
+      return;
+    }
+
     // Always update UI
     this.p1HealthBar.update(this.fighter1.health, this.fighter1.maxHealth);
     this.p2HealthBar.update(this.fighter2.health, this.fighter2.maxHealth);
