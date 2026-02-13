@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 import { POSES, lerpPose } from './FighterAnimations.js';
 import { StickFigureRenderer } from './StickFigureRenderer.js';
+import { SoundManager } from '../audio/SoundManager.js';
 
 const STATES = {
   IDLE: 'IDLE',
@@ -209,6 +210,14 @@ export class Fighter {
     this.stateTimer = 0;
     this.animFrame = 0;
     this.animTimer = 0;
+
+    // Sound effects on state entry
+    switch (newState) {
+      case STATES.PUNCH: SoundManager.punch(); break;
+      case STATES.KICK: SoundManager.kick(); break;
+      case STATES.SPECIAL: SoundManager.special(); break;
+      case STATES.JUMP: SoundManager.jump(); break;
+    }
 
     if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL].includes(newState)) {
       this.canAct = false;

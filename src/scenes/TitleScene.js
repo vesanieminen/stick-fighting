@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { StickFigureRenderer } from '../fighters/StickFigureRenderer.js';
 import { POSES } from '../fighters/FighterAnimations.js';
+import { SoundManager } from '../audio/SoundManager.js';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -71,6 +72,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   startGame() {
+    SoundManager.menuSelect();
     this.registry.set('p1Wins', 0);
     this.registry.set('p2Wins', 0);
     this.registry.set('currentRound', 1);

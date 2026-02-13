@@ -5,6 +5,7 @@ import { FIGHTER_DATA } from '../fighters/FighterData.js';
 import { InputManager } from '../input/InputManager.js';
 import { HealthBar } from '../ui/HealthBar.js';
 import { RoundIndicator } from '../ui/RoundIndicator.js';
+import { SoundManager } from '../audio/SoundManager.js';
 
 export class FightScene extends Phaser.Scene {
   constructor() {
@@ -132,6 +133,7 @@ export class FightScene extends Phaser.Scene {
       announce.setText('FIGHT!');
       announce.setColor('#ffcc00');
       announce.setFontSize('80px');
+      SoundManager.roundStart();
 
       this.time.delayedCall(600, () => {
         this.tweens.add({
@@ -211,8 +213,16 @@ export class FightScene extends Phaser.Scene {
       attacker.hasHit = true;
       const attackData = attacker.getAttackData();
       const knockDir = attacker.facingRight ? 1 : -1;
+      const wasBlocking = defender.state === 'BLOCK';
 
       defender.takeDamage(attackData.damage, knockDir * attackData.knockback);
+
+      // Sound
+      if (wasBlocking) {
+        SoundManager.block();
+      } else {
+        SoundManager.hit();
+      }
 
       // Visual feedback - screen shake
       this.cameras.main.shake(100, 0.005 * attackData.damage);
@@ -221,7 +231,7 @@ export class FightScene extends Phaser.Scene {
       this.createHitSpark(
         (hitbox.x + hitbox.width / 2),
         (hitbox.y + hitbox.height / 2),
-        defender.state === 'BLOCK'
+        wasBlocking
       );
     }
   }
@@ -271,6 +281,7 @@ export class FightScene extends Phaser.Scene {
       fontSize: '80px', fontFamily: 'monospace', color: '#ff3333', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(200);
 
+    SoundManager.ko();
     this.cameras.main.shake(300, 0.01);
 
     this.time.delayedCall(GAME_CONFIG.ROUND_END_DELAY, () => {
