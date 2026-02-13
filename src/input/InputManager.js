@@ -118,14 +118,18 @@ export class InputManager {
     const DEADZONE = 0.3;
     const stickX = pad.leftStick ? pad.leftStick.x : 0;
 
+    // Use explicit button indices for reliable PS5/Xbox mapping
+    // Standard gamepad: 0=South(Cross/A), 1=East(Circle/B), 2=West(Square/X), 3=North(Triangle/Y)
+    const btn = (i) => pad.buttons[i] && pad.buttons[i].pressed;
+
     return {
       left:    pad.left || stickX < -DEADZONE,
       right:   pad.right || stickX > DEADZONE,
-      jump:    pad.A,
-      punch:   pad.B,
-      kick:    pad.Y,
-      special: pad.X,
-      block:   pad.L1 || pad.R1,
+      jump:    btn(0),              // South (Cross on PS5, A on Xbox)
+      punch:   btn(2),              // West (Square on PS5, X on Xbox)
+      kick:    btn(3),              // North (Triangle on PS5, Y on Xbox)
+      special: btn(1),              // East (Circle on PS5, B on Xbox)
+      block:   btn(4) || btn(5),    // L1/R1
     };
   }
 }
