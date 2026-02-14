@@ -20,6 +20,9 @@ const STATES = {
   KICK: 'KICK',
   SPECIAL: 'SPECIAL',
   BLOCK: 'BLOCK',
+  CROUCH: 'CROUCH',
+  CROUCH_PUNCH: 'CROUCH_PUNCH',
+  CROUCH_KICK: 'CROUCH_KICK',
   HIT: 'HIT',
   KO: 'KO',
   VICTORY: 'VICTORY',
@@ -75,6 +78,7 @@ export class Fighter {
   get y() { return this.body.y; }
   get isGrounded() { return this.body.body.blocked.down; }
   get specialDuration() { return this.data.specialDuration || GAME_CONFIG.SPECIAL_DURATION; }
+  get isCrouching() { return [STATES.CROUCH, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state); }
 
   update(delta, input) {
     this.stateTimer += delta;
@@ -100,35 +104,73 @@ export class Fighter {
     // Can't act during attack recovery or hitstun
     if (!this.canAct) return;
 
-    // Release block — always checked first, regardless of grounded state
-    if (this.state === STATES.BLOCK && !input.block) {
+    // Derive blocking direction: pressing AWAY from the opponent
+    const pressingBack = (this.facingRight && input.left) || (!this.facingRight && input.right);
+
+    // Release block when no longer pressing back
+    if (this.state === STATES.BLOCK && !pressingBack) {
       this.enterState(STATES.IDLE);
     }
 
-    const inActionableState = [STATES.IDLE, STATES.WALK_FORWARD, STATES.WALK_BACKWARD, STATES.BLOCK].includes(this.state);
+    // Release crouch when no longer pressing down
+    if (this.state === STATES.CROUCH && !input.down) {
+      this.enterState(STATES.IDLE);
+    }
+
+    const inActionableState = [
+      STATES.IDLE, STATES.WALK_FORWARD, STATES.WALK_BACKWARD,
+      STATES.BLOCK, STATES.CROUCH
+    ].includes(this.state);
     const inAir = !this.isGrounded;
 
     // Attack inputs (priority over movement, requires cooldown expired)
     if ((inActionableState || (inAir && this.state === STATES.JUMP)) && this.attackCooldown <= 0) {
-      if (input.special && this.specialCooldown <= 0 && this.isGrounded) {
+      // Special (standing only, grounded only)
+      if (input.special && this.specialCooldown <= 0 && this.isGrounded
+          && this.state !== STATES.CROUCH) {
         this.enterState(STATES.SPECIAL);
         this.specialCooldown = GAME_CONFIG.SPECIAL_COOLDOWN;
         return;
       }
-      if (input.punch) {
-        this.enterState(STATES.PUNCH);
-        return;
+
+      // Crouch attacks (from CROUCH state)
+      if (this.state === STATES.CROUCH) {
+        if (input.punch) {
+          this.enterState(STATES.CROUCH_PUNCH);
+          return;
+        }
+        if (input.kick) {
+          this.enterState(STATES.CROUCH_KICK);
+          return;
+        }
       }
-      if (input.kick) {
-        this.enterState(STATES.KICK);
-        return;
+
+      // Standing attacks (from any non-crouch actionable state or jump)
+      if (this.state !== STATES.CROUCH) {
+        if (input.punch) {
+          this.enterState(STATES.PUNCH);
+          return;
+        }
+        if (input.kick) {
+          this.enterState(STATES.KICK);
+          return;
+        }
       }
     }
 
-    // Block (requires grounded to enter, but release handled above)
-    if (input.block && this.isGrounded && inActionableState) {
+    // Block (back direction, grounded, actionable)
+    if (pressingBack && this.isGrounded && inActionableState) {
       if (this.state !== STATES.BLOCK) {
         this.enterState(STATES.BLOCK);
+      }
+      this.body.body.setVelocityX(0);
+      return;
+    }
+
+    // Crouch (down, grounded, actionable)
+    if (input.down && this.isGrounded && inActionableState) {
+      if (this.state !== STATES.CROUCH) {
+        this.enterState(STATES.CROUCH);
       }
       this.body.body.setVelocityX(0);
       return;
@@ -141,8 +183,9 @@ export class Fighter {
       return;
     }
 
-    // Movement (only on ground in actionable states, never during attacks)
-    if (this.state !== STATES.BLOCK && this.state !== STATES.JUMP && !this.isAttacking()) {
+    // Movement (only on ground in actionable states, never during attacks or crouch)
+    if (this.state !== STATES.BLOCK && this.state !== STATES.CROUCH
+        && this.state !== STATES.JUMP && !this.isAttacking()) {
       if (input.left) {
         this.body.body.setVelocityX(-this.data.moveSpeed);
         if (this.isGrounded) {
@@ -190,6 +233,24 @@ export class Fighter {
           this.hasHit = false;
           this.attackCooldown = GAME_CONFIG.KICK_RECOVERY;
           this.enterState(STATES.IDLE);
+        }
+        break;
+
+      case STATES.CROUCH_PUNCH:
+        if (this.stateTimer >= GAME_CONFIG.PUNCH_DURATION) {
+          this.canAct = true;
+          this.hasHit = false;
+          this.attackCooldown = GAME_CONFIG.PUNCH_RECOVERY;
+          this.enterState(STATES.CROUCH);
+        }
+        break;
+
+      case STATES.CROUCH_KICK:
+        if (this.stateTimer >= GAME_CONFIG.KICK_DURATION) {
+          this.canAct = true;
+          this.hasHit = false;
+          this.attackCooldown = GAME_CONFIG.KICK_RECOVERY;
+          this.enterState(STATES.CROUCH);
         }
         break;
 
@@ -470,13 +531,13 @@ export class Fighter {
 
     // Sound effects on state entry
     switch (newState) {
-      case STATES.PUNCH: SoundManager.punch(); break;
-      case STATES.KICK: SoundManager.kick(); break;
+      case STATES.PUNCH: case STATES.CROUCH_PUNCH: SoundManager.punch(); break;
+      case STATES.KICK: case STATES.CROUCH_KICK: SoundManager.kick(); break;
       case STATES.SPECIAL: SoundManager.special(); break;
       case STATES.JUMP: SoundManager.jump(); break;
     }
 
-    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL].includes(newState)) {
+    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
       this.canAct = false;
       this.hasHit = false;
 
@@ -500,14 +561,14 @@ export class Fighter {
       this.canAct = false;
     }
 
-    // Stop sliding when blocking
-    if (newState === STATES.BLOCK) {
+    // Stop sliding when blocking or crouching
+    if (newState === STATES.BLOCK || newState === STATES.CROUCH) {
       this.body.body.setVelocityX(0);
     }
   }
 
   isAttacking() {
-    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL].includes(this.state);
+    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
   }
 
   isOnActiveFrame() {
@@ -516,11 +577,13 @@ export class Fighter {
     let duration, activeStart, activeEnd;
     switch (this.state) {
       case STATES.PUNCH:
+      case STATES.CROUCH_PUNCH:
         duration = GAME_CONFIG.PUNCH_DURATION;
         activeStart = duration * 0.3;
         activeEnd = duration * 0.6;
         break;
       case STATES.KICK:
+      case STATES.CROUCH_KICK:
         duration = GAME_CONFIG.KICK_DURATION;
         activeStart = duration * 0.25;
         activeEnd = duration * 0.6;
@@ -563,18 +626,35 @@ export class Fighter {
           damage: Math.round(this.data.punchDamage * stale),
           range: this.data.punchRange,
           knockback: GAME_CONFIG.PUNCH_KNOCKBACK,
+          isCrouchAttack: false,
         };
       case STATES.KICK:
         return {
           damage: Math.round(this.data.kickDamage * stale),
           range: this.data.kickRange,
           knockback: GAME_CONFIG.KICK_KNOCKBACK,
+          isCrouchAttack: false,
         };
       case STATES.SPECIAL:
         return {
           damage: Math.round(this.data.specialDamage * stale),
           range: this.data.specialRange,
           knockback: GAME_CONFIG.SPECIAL_KNOCKBACK,
+          isCrouchAttack: false,
+        };
+      case STATES.CROUCH_PUNCH:
+        return {
+          damage: Math.round(this.data.punchDamage * stale),
+          range: this.data.punchRange,
+          knockback: GAME_CONFIG.PUNCH_KNOCKBACK,
+          isCrouchAttack: true,
+        };
+      case STATES.CROUCH_KICK:
+        return {
+          damage: Math.round(this.data.kickDamage * stale),
+          range: this.data.kickRange,
+          knockback: GAME_CONFIG.KICK_KNOCKBACK,
+          isCrouchAttack: true,
         };
       default:
         return null;
@@ -615,21 +695,49 @@ export class Fighter {
       }
     }
 
-    // Standard forward-facing hitbox (punch, kick, and forward specials)
-    // Full body height so attacks connect across platform height differences
+    // Determine hitbox vertical region based on attack type
+    const halfH = bodyH / 2;
+    let hitboxY, hitboxH;
+    if (attack.isCrouchAttack) {
+      // Crouch attacks: bottom half of body (legs/sweep level)
+      hitboxY = by;
+      hitboxH = halfH;
+    } else {
+      // Standing attacks: top half of body (upper body level)
+      // -1 prevents boundary overlap with crouch hurtbox
+      hitboxY = by - halfH;
+      hitboxH = halfH - 1;
+    }
+
+    // Horizontal positioning: extends forward from body edge
     const hbX = dir > 0
       ? bx + GAME_CONFIG.BODY_WIDTH / 2
       : bx - GAME_CONFIG.BODY_WIDTH / 2 - attack.range;
 
-    return new Phaser.Geom.Rectangle(hbX, by - bodyH / 2, attack.range, bodyH);
+    return new Phaser.Geom.Rectangle(hbX, hitboxY, attack.range, hitboxH);
   }
 
   getHurtboxRect() {
+    const bodyW = GAME_CONFIG.BODY_WIDTH;
+    const bodyH = GAME_CONFIG.BODY_HEIGHT;
+
+    if (this.isCrouching) {
+      // Crouching: hurtbox is bottom half only (duck under standing attacks)
+      const halfH = bodyH / 2;
+      return new Phaser.Geom.Rectangle(
+        this.x - bodyW / 2,
+        this.y,
+        bodyW,
+        halfH
+      );
+    }
+
+    // Standing: full body height
     return new Phaser.Geom.Rectangle(
-      this.x - GAME_CONFIG.BODY_WIDTH / 2,
-      this.y - GAME_CONFIG.BODY_HEIGHT / 2,
-      GAME_CONFIG.BODY_WIDTH,
-      GAME_CONFIG.BODY_HEIGHT
+      this.x - bodyW / 2,
+      this.y - bodyH / 2,
+      bodyW,
+      bodyH
     );
   }
 
@@ -712,8 +820,8 @@ export class Fighter {
       let totalDuration;
       let looping = false;
       switch (this.state) {
-        case STATES.PUNCH: totalDuration = GAME_CONFIG.PUNCH_DURATION; break;
-        case STATES.KICK: totalDuration = GAME_CONFIG.KICK_DURATION; break;
+        case STATES.PUNCH: case STATES.CROUCH_PUNCH: totalDuration = GAME_CONFIG.PUNCH_DURATION; break;
+        case STATES.KICK: case STATES.CROUCH_KICK: totalDuration = GAME_CONFIG.KICK_DURATION; break;
         case STATES.SPECIAL: totalDuration = this.specialDuration; break;
         case STATES.KO: totalDuration = 800; break;
         case STATES.JUMP: totalDuration = 600; break;

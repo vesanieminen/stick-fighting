@@ -14,7 +14,7 @@ export class AIController {
       punch: false,
       kick: false,
       special: false,
-      block: false,
+      down: false,
     };
 
     // Previous frame state for edge detection
@@ -53,7 +53,7 @@ export class AIController {
       punch: raw.punch && !this.prevState.punch,
       kick: raw.kick && !this.prevState.kick,
       special: raw.special && !this.prevState.special,
-      block: raw.block,
+      down: raw.down,
     };
 
     this.prevState = {
@@ -75,7 +75,7 @@ export class AIController {
       punch: false,
       kick: false,
       special: false,
-      block: false,
+      down: false,
     };
 
     // 15% chance to do nothing (makes AI beatable)
@@ -119,10 +119,22 @@ export class AIController {
         a.jump = true;
       }
     } else {
-      // Close range — attack or block
-      if (oppAttacking && Math.random() < 0.25) {
-        // Block when opponent is attacking
-        a.block = true;
+      // Close range — attack or defend
+      if (oppAttacking && Math.random() < 0.35) {
+        // Defensive reaction
+        if (Math.random() < 0.6) {
+          // Block by pressing back (away from opponent)
+          if (facingOpp) a.left = true;
+          else a.right = true;
+        } else {
+          // Crouch (dodge standing attacks)
+          a.down = true;
+          // Occasionally counter-attack from crouch
+          if (Math.random() < 0.4) {
+            if (Math.random() < 0.5) a.punch = true;
+            else a.kick = true;
+          }
+        }
       } else {
         // Attack
         const roll = Math.random();

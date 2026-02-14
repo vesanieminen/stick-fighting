@@ -8,7 +8,7 @@ const KEYBOARD_BINDINGS = {
     punch:   'J',
     kick:    'K',
     special: 'L',
-    block:   'S',
+    down:    'S',
   },
   1: {  // Player 2
     left:    'LEFT',
@@ -17,7 +17,7 @@ const KEYBOARD_BINDINGS = {
     punch:   'COMMA',
     kick:    'PERIOD',
     special: 'MINUS',
-    block:   'DOWN',
+    down:    'DOWN',
   }
 };
 
@@ -74,7 +74,7 @@ export class InputManager {
       punch:   kb.punch   || gp.punch,
       kick:    kb.kick    || gp.kick,
       special: kb.special || gp.special,
-      block:   kb.block   || gp.block,
+      down:    kb.down    || gp.down,
     };
 
     // Edge detection for one-shot actions
@@ -85,7 +85,7 @@ export class InputManager {
       punch:   raw.punch   && !this.prevState.punch,
       kick:    raw.kick    && !this.prevState.kick,
       special: raw.special && !this.prevState.special,
-      block:   raw.block,
+      down:    raw.down,
     };
 
     this.prevState = {
@@ -106,17 +106,18 @@ export class InputManager {
       punch:   this.keys.punch.isDown,
       kick:    this.keys.kick.isDown,
       special: this.keys.special.isDown,
-      block:   this.keys.block.isDown,
+      down:    this.keys.down.isDown,
     };
   }
 
   readGamepad() {
     const pad = this.gamepad;
-    const none = { left: false, right: false, jump: false, punch: false, kick: false, special: false, block: false };
+    const none = { left: false, right: false, jump: false, punch: false, kick: false, special: false, down: false };
     if (!pad || !pad.connected) return none;
 
     const DEADZONE = 0.3;
     const stickX = pad.leftStick ? pad.leftStick.x : 0;
+    const stickY = pad.leftStick ? pad.leftStick.y : 0;
 
     // Use explicit button indices for reliable PS5/Xbox mapping
     // Standard gamepad: 0=South(Cross/A), 1=East(Circle/B), 2=West(Square/X), 3=North(Triangle/Y)
@@ -129,7 +130,7 @@ export class InputManager {
       punch:   btn(2),              // West (Square on PS5, X on Xbox)
       kick:    btn(3),              // North (Triangle on PS5, Y on Xbox)
       special: btn(1),              // East (Circle on PS5, B on Xbox)
-      block:   btn(4) || btn(5),    // L1/R1
+      down:    pad.down || stickY > DEADZONE,  // D-pad down or stick down
     };
   }
 }
