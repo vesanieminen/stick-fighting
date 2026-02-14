@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
-import { POSES, lerpPose } from './FighterAnimations.js';
+import { POSES, lerpPose, mirrorPose } from './FighterAnimations.js';
 import { StickFigureRenderer } from './StickFigureRenderer.js';
 import { SoundManager } from '../audio/SoundManager.js';
 import {
@@ -51,6 +51,9 @@ export class Fighter {
 
     // Attack cooldown — prevents rapid-fire attack spam
     this.attackCooldown = 0;
+
+    // Alternating limb — toggles which arm/leg leads on repeated attacks
+    this.attackAlternate = false;
 
     // Stale move tracking — repeated same attacks deal less damage
     this.lastAttackType = null;
@@ -717,6 +720,11 @@ export class Fighter {
       this.canAct = false;
       this.hasHit = false;
 
+      // Toggle alternating limb for punch/kick
+      if ([STATES.PUNCH, STATES.KICK, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
+        this.attackAlternate = !this.attackAlternate;
+      }
+
       // Track stale moves
       const attackType = newState;
       if (attackType === this.lastAttackType && this.timeSinceLastAttack < GAME_CONFIG.STALE_MOVE_RESET_TIME) {
@@ -1001,6 +1009,7 @@ export class Fighter {
     this._effectPhase = 0;
     this._effectTimer = 0;
     this.attackCooldown = 0;
+    this.attackAlternate = false;
     this.lastAttackType = null;
     this.sameAttackCount = 0;
     this.timeSinceLastAttack = 0;
@@ -1056,6 +1065,12 @@ export class Fighter {
       } else {
         pose = lerpPose(poses[currentFrame], poses[nextFrame], t);
       }
+    }
+
+    // Alternate limbs on every other attack
+    const isAttackAnim = [STATES.PUNCH, STATES.KICK, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
+    if (isAttackAnim && this.attackAlternate) {
+      pose = mirrorPose(pose);
     }
 
     // Draw the stick figure: hip positioned so feet land at body bottom

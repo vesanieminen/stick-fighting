@@ -916,6 +916,25 @@ export const POSES = {
   ],
 };
 
+// Helper to swap left/right limbs — makes the other arm/leg lead
+export function mirrorPose(pose) {
+  return {
+    head:      { x: pose.head.x, y: pose.head.y },
+    neck:      { x: pose.neck.x, y: pose.neck.y },
+    hip:       { x: pose.hip.x, y: pose.hip.y },
+    shoulderL: { x: pose.shoulderR.x, y: pose.shoulderR.y },
+    shoulderR: { x: pose.shoulderL.x, y: pose.shoulderL.y },
+    elbowL:    { x: pose.elbowR.x, y: pose.elbowR.y },
+    elbowR:    { x: pose.elbowL.x, y: pose.elbowL.y },
+    handL:     { x: pose.handR.x, y: pose.handR.y },
+    handR:     { x: pose.handL.x, y: pose.handL.y },
+    kneeL:     { x: pose.kneeR.x, y: pose.kneeR.y },
+    kneeR:     { x: pose.kneeL.x, y: pose.kneeL.y },
+    footL:     { x: pose.footR.x, y: pose.footR.y },
+    footR:     { x: pose.footL.x, y: pose.footL.y },
+  };
+}
+
 // Helper to interpolate between two poses
 export function lerpPose(poseA, poseB, t) {
   const result = {};

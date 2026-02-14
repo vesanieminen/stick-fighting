@@ -29,7 +29,8 @@ export class TitleScene extends Phaser.Scene {
 
     // Version and build timestamp
     const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
-    this.add.text(640, 710, `v1.0.0 | Built ${buildTime.replace('T', ' ').slice(0, 19)} UTC`, {
+    const version = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0';
+    this.add.text(640, 710, `v${version} | Built ${buildTime.replace('T', ' ').slice(0, 19)} UTC`, {
       fontSize: '11px',
       fontFamily: 'monospace',
       color: '#444444'
