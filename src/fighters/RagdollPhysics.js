@@ -7,7 +7,7 @@ const DAMPING = 0.98;
 const GROUND_FRICTION = 0.85;
 const BOUNCE = 0.25;
 const CONSTRAINT_ITERATIONS = 5;
-const GROUND_Y = 620;
+const DEFAULT_GROUND_Y = 620;
 const STAGE_LEFT = 50;
 const STAGE_RIGHT = 1230;
 const SETTLE_TIME = 2000; // ms before extra damping kicks in
@@ -80,8 +80,9 @@ function dist(ax, ay, bx, by) {
 }
 
 export class RagdollPhysics {
-  constructor(worldPose, knockbackVelX, knockbackVelY, visual) {
+  constructor(worldPose, knockbackVelX, knockbackVelY, visual, groundY) {
     this.elapsed = 0;
+    this.groundY = groundY !== undefined ? groundY : DEFAULT_GROUND_Y;
 
     // Heavier visual fighters (thicker lines) have more mass and less bounce
     const lineWidth = (visual && visual.lineWidth) || 1.0;
@@ -165,8 +166,8 @@ export class RagdollPhysics {
       // Ground collision after each iteration
       for (const name of JOINT_NAMES) {
         const p = this.particles[name];
-        if (p.y > GROUND_Y) {
-          p.y = GROUND_Y;
+        if (p.y > this.groundY) {
+          p.y = this.groundY;
           // Bounce: reflect vertical velocity
           const vy = p.y - p.prevY;
           if (vy > 0) {
@@ -177,14 +178,16 @@ export class RagdollPhysics {
           p.prevX = p.x - vx * GROUND_FRICTION;
         }
 
-        // Stage boundary clamping
-        if (p.x < STAGE_LEFT) {
-          p.x = STAGE_LEFT;
-          p.prevX = Math.max(p.prevX, STAGE_LEFT);
-        }
-        if (p.x > STAGE_RIGHT) {
-          p.x = STAGE_RIGHT;
-          p.prevX = Math.min(p.prevX, STAGE_RIGHT);
+        // Stage boundary clamping (skip for bottomless maps where ragdoll falls off)
+        if (this.groundY <= DEFAULT_GROUND_Y + 100) {
+          if (p.x < STAGE_LEFT) {
+            p.x = STAGE_LEFT;
+            p.prevX = Math.max(p.prevX, STAGE_LEFT);
+          }
+          if (p.x > STAGE_RIGHT) {
+            p.x = STAGE_RIGHT;
+            p.prevX = Math.min(p.prevX, STAGE_RIGHT);
+          }
         }
       }
     }

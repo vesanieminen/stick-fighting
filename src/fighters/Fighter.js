@@ -9,7 +9,7 @@ import {
   spawnFireTrail, spawnIceTrail, spawnIceCrystals, spawnLightningBolt,
   spawnElectricSparks, spawnSlashMark, spawnArmorGlow, spawnWhirlwindArcs,
   spawnChargingAura, spawnExplosionRing, spawnSmokePuff, spawnTeleportFlash,
-  spawnGroundCrack, spawnComboFinisher,
+  spawnGroundCrack, spawnComboFinisher, spawnWallImpact,
 } from '../effects/SpecialEffects.js';
 
 const STATES = {
@@ -21,6 +21,7 @@ const STATES = {
   KICK: 'KICK',
   SPECIAL: 'SPECIAL',
   COMBO_FINISHER: 'COMBO_FINISHER',
+  WALL_SPECIAL: 'WALL_SPECIAL',
   BLOCK: 'BLOCK',
   CROUCH: 'CROUCH',
   CROUCH_PUNCH: 'CROUCH_PUNCH',
@@ -49,6 +50,11 @@ export class Fighter {
     this.armorActive = false; // For armor smash
     this._effectPhase = 0; // Tracks which one-shot effects have fired
     this._effectTimer = 0; // Timer for periodic effects
+
+    // Wall combo tracking
+    this.wallComboHits = 0;
+    this.wallComboTimer = 0;
+    this.opponentNearWallFn = null; // Set by FightScene
 
     // Attack cooldown — prevents rapid-fire attack spam
     this.attackCooldown = 0;
@@ -120,6 +126,15 @@ export class Fighter {
       this.sameAttackCount = 0;
     }
 
+    // Wall combo timer decay
+    if (this.wallComboTimer > 0) {
+      this.wallComboTimer -= delta;
+      if (this.wallComboTimer <= 0) {
+        this.wallComboHits = 0;
+        this.wallComboTimer = 0;
+      }
+    }
+
     // Combo expiry — reset if not attacking for too long
     if (!this.isAttacking() && this.comboChain.length > 0) {
       this.comboTimer += delta;
@@ -182,6 +197,14 @@ export class Fighter {
       // Special (standing only, grounded only)
       if (input.special && this.specialCooldown <= 0 && this.isGrounded
           && this.state !== STATES.CROUCH) {
+        // Check wall combo special conditions
+        if (this.wallComboHits >= 2 && this.opponentNearWallFn && this.opponentNearWallFn()) {
+          this.enterState(STATES.WALL_SPECIAL);
+          this.specialCooldown = GAME_CONFIG.SPECIAL_COOLDOWN;
+          this.wallComboHits = 0;
+          this.wallComboTimer = 0;
+          return;
+        }
         this.enterState(STATES.SPECIAL);
         this.specialCooldown = GAME_CONFIG.SPECIAL_COOLDOWN;
         return;
@@ -275,6 +298,7 @@ export class Fighter {
       case STATES.PUNCH: case STATES.CROUCH_PUNCH: return GAME_CONFIG.PUNCH_DURATION;
       case STATES.KICK: case STATES.CROUCH_KICK: return GAME_CONFIG.KICK_DURATION;
       case STATES.SPECIAL: return this.specialDuration;
+      case STATES.WALL_SPECIAL: return 600;
       case STATES.COMBO_FINISHER: return 450;
       default: return 0;
     }
@@ -374,6 +398,19 @@ export class Fighter {
         }
         break;
 
+      case STATES.WALL_SPECIAL:
+        this.updateWallSpecial(delta);
+        if (this.stateTimer >= 600) {
+          this.canAct = true;
+          this.hasHit = false;
+          this._effectPhase = 0;
+          this._effectTimer = 0;
+          this.attackCooldown = GAME_CONFIG.SPECIAL_RECOVERY;
+          this.body.body.setVelocityX(0);
+          this.enterState(STATES.IDLE);
+        }
+        break;
+
       case STATES.HIT:
         if (this.stateTimer >= GAME_CONFIG.HITSTUN_DURATION) {
           this.canAct = true;
@@ -390,8 +427,8 @@ export class Fighter {
 
       case STATES.KO:
         // Ragdoll physics replaces the old canned slide
-        this.body.body.setVelocity(0, 0);
         if (this.ragdoll) {
+          this.body.body.setVelocity(0, 0);
           this.ragdoll.update(delta / 1000);
         }
         break;
@@ -703,6 +740,45 @@ export class Fighter {
     }
   }
 
+  updateWallSpecial(delta) {
+    const dur = 600;
+    const t = this.stateTimer;
+    const dir = this.facingRight ? 1 : -1;
+    const progress = t / dur;
+
+    this._effectTimer += delta;
+
+    // Forward lunge during 20%-50%
+    if (progress >= 0.2 && progress <= 0.5) {
+      this.body.body.setVelocityX(dir * 400);
+    } else if (progress > 0.5) {
+      this.body.body.setVelocityX(0);
+    }
+
+    // VFX at 25% — combo finisher strike effect
+    if (this._effectPhase < 1 && progress >= 0.25) {
+      this._effectPhase = 1;
+      spawnComboFinisher(this.scene, this.x + dir * 40, this.y, dir, this.data.color, 'strike');
+      SoundManager.heavyImpact();
+    }
+
+    // Wall impact VFX at 55% (when hit connects near wall)
+    if (this._effectPhase < 2 && progress >= 0.55) {
+      this._effectPhase = 2;
+      // Determine which wall the opponent is near
+      const wallX = this.opponent
+        ? (this.opponent.x < GAME_CONFIG.STAGE_LEFT + 60 ? GAME_CONFIG.STAGE_LEFT : GAME_CONFIG.STAGE_RIGHT)
+        : (this.x + dir * 100);
+      spawnWallImpact(this.scene, wallX, this.y, this.data.color, this.data.wallSpecialType);
+      this.scene.cameras.main.shake(250, 0.02);
+    }
+  }
+
+  registerWallComboHit() {
+    this.wallComboHits++;
+    this.wallComboTimer = 1200;
+  }
+
   enterState(newState) {
     this.state = newState;
     this.stateTimer = 0;
@@ -714,11 +790,12 @@ export class Fighter {
       case STATES.PUNCH: case STATES.CROUCH_PUNCH: SoundManager.punch(); break;
       case STATES.KICK: case STATES.CROUCH_KICK: SoundManager.kick(); break;
       case STATES.SPECIAL: SoundManager.special(); break;
+      case STATES.WALL_SPECIAL: SoundManager.special(); break;
       case STATES.COMBO_FINISHER: SoundManager.special(); break;
       case STATES.JUMP: SoundManager.jump(); break;
     }
 
-    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
+    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.WALL_SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
       this.canAct = false;
       this.hasHit = false;
 
@@ -738,7 +815,7 @@ export class Fighter {
       this.timeSinceLastAttack = 0;
     }
 
-    if (newState === STATES.SPECIAL || newState === STATES.COMBO_FINISHER) {
+    if (newState === STATES.SPECIAL || newState === STATES.WALL_SPECIAL || newState === STATES.COMBO_FINISHER) {
       this._effectPhase = 0;
       this._effectTimer = 0;
     }
@@ -755,7 +832,7 @@ export class Fighter {
   }
 
   isAttacking() {
-    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
+    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.WALL_SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
   }
 
   isOnActiveFrame() {
@@ -779,6 +856,11 @@ export class Fighter {
         duration = 450;
         activeStart = duration * 0.25;
         activeEnd = duration * 0.55;
+        break;
+      case STATES.WALL_SPECIAL:
+        duration = 600;
+        activeStart = duration * 0.30;
+        activeEnd = duration * 0.60;
         break;
       case STATES.SPECIAL:
         duration = this.specialDuration;
@@ -835,6 +917,15 @@ export class Fighter {
           damage: Math.round(this.data.kickDamage * comboScale),
           range: Math.max(this.data.punchRange, this.data.kickRange) + 15,
           knockback: GAME_CONFIG.SPECIAL_KNOCKBACK,
+          isCrouchAttack: false,
+          blockPiercing: true,
+        };
+      case STATES.WALL_SPECIAL:
+        return {
+          damage: Math.round(this.data.specialDamage * 1.3),
+          range: this.data.specialRange + 20,
+          knockback: GAME_CONFIG.SPECIAL_KNOCKBACK,
+          knockbackY: -400,
           isCrouchAttack: false,
           blockPiercing: true,
         };
@@ -966,24 +1057,26 @@ export class Fighter {
     } else {
       this.health -= amount;
       this.body.body.setVelocityX(knockbackX);
-      this.body.body.setVelocityY(-150);
+      this.body.body.setVelocityY(attackFlags.knockbackY || -150);
       this.enterState(STATES.HIT);
     }
 
     this.health = Math.max(0, this.health);
 
     if (this.health <= 0) {
-      this.createRagdoll(knockbackX, -150);
+      this.createRagdoll(knockbackX, -150, this._ragdollGroundY);
       this.enterState(STATES.KO);
       this.canAct = false;
     }
   }
 
-  createRagdoll(knockbackVelX, knockbackVelY) {
+  createRagdoll(knockbackVelX, knockbackVelY, groundY) {
     // Snapshot current pose to world-space positions (mirrors transformPose logic)
     const poseKey = this.state === STATES.COMBO_FINISHER
       ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
-      : this.state;
+      : this.state === STATES.WALL_SPECIAL
+        ? 'COMBO_FINISHER_STRIKE'
+        : this.state;
     const poses = POSES[poseKey];
     if (!poses) return;
 
@@ -1008,7 +1101,7 @@ export class Fighter {
       };
     }
 
-    this.ragdoll = new RagdollPhysics(worldPose, knockbackVelX, knockbackVelY, v);
+    this.ragdoll = new RagdollPhysics(worldPose, knockbackVelX, knockbackVelY, v, groundY);
   }
 
   onAttackBlocked(knockDir) {
@@ -1049,6 +1142,8 @@ export class Fighter {
     this.sameAttackCount = 0;
     this.timeSinceLastAttack = 0;
     this.hitstopTimer = 0;
+    this.wallComboHits = 0;
+    this.wallComboTimer = 0;
     this.ragdoll = null;
     this.resetCombo();
   }
@@ -1063,7 +1158,9 @@ export class Fighter {
 
     const poseKey = this.state === STATES.COMBO_FINISHER
       ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
-      : this.state;
+      : this.state === STATES.WALL_SPECIAL
+        ? 'COMBO_FINISHER_STRIKE'
+        : this.state;
     const poses = POSES[poseKey];
     if (!poses) return;
 
@@ -1080,6 +1177,7 @@ export class Fighter {
         case STATES.PUNCH: case STATES.CROUCH_PUNCH: totalDuration = this.getEffectiveDuration(); break;
         case STATES.KICK: case STATES.CROUCH_KICK: totalDuration = this.getEffectiveDuration(); break;
         case STATES.SPECIAL: totalDuration = this.specialDuration; break;
+        case STATES.WALL_SPECIAL: totalDuration = 600; break;
         case STATES.COMBO_FINISHER: totalDuration = 450; break;
         case STATES.KO: totalDuration = 800; break;
         case STATES.JUMP: totalDuration = 600; break;

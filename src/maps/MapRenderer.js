@@ -10,6 +10,11 @@ export class MapRenderer {
     this.decoGraphics = null;
     this.platformGraphics = null;
     this.lavaGraphics = null;
+    this.movingPlatGraphics = null;
+    this.spikeGraphics = null;
+
+    // Moving platform current positions (updated from FightScene)
+    this.movingPlatformPositions = [];
   }
 
   /** Draw the full map (background, ground, decorations, platforms). Called once in create(). */
@@ -19,32 +24,46 @@ export class MapRenderer {
     // Background
     this.bgGraphics = scene.add.graphics().setDepth(0);
     this.bgGraphics.fillStyle(map.bgColor, 1);
-    this.bgGraphics.fillRect(0, 0, 1280, map.groundY);
+    this.bgGraphics.fillRect(0, 0, 1280, 720);
 
-    // Ground
-    this.bgGraphics.fillStyle(map.groundColor, 1);
-    this.bgGraphics.fillRect(0, map.groundY, 1280, 100);
+    if (!map.noGround) {
+      // Ground
+      this.bgGraphics.fillStyle(map.groundColor, 1);
+      this.bgGraphics.fillRect(0, map.groundY, 1280, 100);
 
-    // Ground line
-    this.bgGraphics.lineStyle(3, map.groundLineColor, 1);
-    this.bgGraphics.lineBetween(0, map.groundY, 1280, map.groundY);
+      // Ground line
+      this.bgGraphics.lineStyle(3, map.groundLineColor, 1);
+      this.bgGraphics.lineBetween(0, map.groundY, 1280, map.groundY);
 
-    // Stage boundaries
-    this.bgGraphics.lineStyle(1, map.groundLineColor, 0.3);
-    this.bgGraphics.lineBetween(map.stageLeft, 0, map.stageLeft, map.groundY);
-    this.bgGraphics.lineBetween(map.stageRight, 0, map.stageRight, map.groundY);
+      // Stage boundaries
+      this.bgGraphics.lineStyle(1, map.groundLineColor, 0.3);
+      this.bgGraphics.lineBetween(map.stageLeft, 0, map.stageLeft, map.groundY);
+      this.bgGraphics.lineBetween(map.stageRight, 0, map.stageRight, map.groundY);
+    }
 
     // Decorations (depth 1 — behind platforms)
     this.decoGraphics = scene.add.graphics().setDepth(1);
-    this.drawDecorations(this.decoGraphics);
+    this.drawDecorations(this.decoGraphics, 0);
 
     // Platforms (depth 2)
     this.platformGraphics = scene.add.graphics().setDepth(2);
     this.drawPlatforms(this.platformGraphics);
 
+    // Spikes layer (depth 1, static)
+    const hasSpikes = map.hazards.some(h => h.type === 'spikes');
+    if (hasSpikes) {
+      this.spikeGraphics = scene.add.graphics().setDepth(1);
+      this.drawSpikes(this.spikeGraphics);
+    }
+
     // Lava layer (depth 1, animated — redrawn each frame)
-    if (map.hazards.length > 0) {
+    if (map.hazards.some(h => h.type === 'lava')) {
       this.lavaGraphics = scene.add.graphics().setDepth(1);
+    }
+
+    // Moving platforms layer (depth 2, redrawn each frame)
+    if (map.movingPlatforms && map.movingPlatforms.length > 0) {
+      this.movingPlatGraphics = scene.add.graphics().setDepth(2);
     }
   }
 
@@ -59,7 +78,7 @@ export class MapRenderer {
     }
   }
 
-  drawDecorations(g) {
+  drawDecorations(g, time) {
     for (const d of this.map.decorations) {
       switch (d.type) {
         case 'rect':
@@ -93,6 +112,14 @@ export class MapRenderer {
 
         case 'building':
           this.drawBuilding(g, d);
+          break;
+
+        case 'gear':
+          this.drawGear(g, d.x, d.y, d.radius || 25);
+          break;
+
+        case 'abyssFog':
+          this.drawAbyssFog(g, d.y, d.count || 6, time || 0);
           break;
       }
     }
@@ -178,13 +205,96 @@ export class MapRenderer {
     }
   }
 
+  drawSpikes(g) {
+    for (const hazard of this.map.hazards) {
+      if (hazard.type !== 'spikes') continue;
+      const y = hazard.y;
+      const color = hazard.color || 0xcc3333;
+      const spikeW = 20;
+      const spikeH = 16;
+
+      // Row of triangles across the stage
+      for (let x = 0; x < 1280; x += spikeW) {
+        g.fillStyle(color, 0.9);
+        g.fillTriangle(x, y + spikeH, x + spikeW, y + spikeH, x + spikeW / 2, y);
+        // Highlight edge
+        g.lineStyle(1, 0xff6666, 0.5);
+        g.lineBetween(x + spikeW / 2, y, x + spikeW, y + spikeH);
+      }
+    }
+  }
+
+  drawGear(g, x, y, radius) {
+    const teeth = 8;
+    const innerR = radius * 0.7;
+    g.lineStyle(2, 0x556688, 0.4);
+
+    // Cog outline
+    for (let i = 0; i < teeth; i++) {
+      const angle = (Math.PI * 2 * i) / teeth;
+      const nextAngle = (Math.PI * 2 * (i + 0.5)) / teeth;
+      const ox = x + Math.cos(angle) * radius;
+      const oy = y + Math.sin(angle) * radius;
+      const ix = x + Math.cos(nextAngle) * innerR;
+      const iy = y + Math.sin(nextAngle) * innerR;
+      g.lineBetween(ox, oy, ix, iy);
+
+      const nextOuter = (Math.PI * 2 * (i + 1)) / teeth;
+      const ox2 = x + Math.cos(nextOuter) * radius;
+      const oy2 = y + Math.sin(nextOuter) * radius;
+      g.lineBetween(ix, iy, ox2, oy2);
+    }
+
+    // Center circle
+    g.strokeCircle(x, y, radius * 0.25);
+  }
+
+  drawAbyssFog(g, y, count, time) {
+    const t = time * 0.001;
+    for (let i = 0; i < count; i++) {
+      const baseX = (i / count) * 1280;
+      const waveX = baseX + Math.sin(t * 0.5 + i * 1.3) * 40;
+      const waveY = y + Math.sin(t * 0.7 + i * 0.9) * 10;
+      const alpha = 0.06 + Math.sin(t * 0.3 + i * 2.1) * 0.03;
+      const w = 120 + Math.sin(t * 0.4 + i) * 30;
+
+      g.fillStyle(0x6666aa, alpha);
+      g.fillEllipse(waveX, waveY, w, 12);
+    }
+  }
+
   /** Update animated elements. Called each frame from FightScene.update(). */
   update(time) {
-    if (!this.map.animated || !this.lavaGraphics) return;
+    if (!this.map.animated) return;
 
-    for (const hazard of this.map.hazards) {
-      if (hazard.type === 'lava') {
-        this.drawLava(this.lavaGraphics, hazard, time);
+    if (this.lavaGraphics) {
+      for (const hazard of this.map.hazards) {
+        if (hazard.type === 'lava') {
+          this.drawLava(this.lavaGraphics, hazard, time);
+        }
+      }
+    }
+
+    // Redraw moving platforms at current positions
+    if (this.movingPlatGraphics && this.movingPlatformPositions.length > 0) {
+      this.movingPlatGraphics.clear();
+      for (const mp of this.movingPlatformPositions) {
+        this.movingPlatGraphics.fillStyle(mp.color, 1);
+        this.movingPlatGraphics.fillRect(mp.x, mp.y, mp.width, mp.height);
+        this.movingPlatGraphics.lineStyle(2, mp.lineColor, 1);
+        this.movingPlatGraphics.lineBetween(mp.x, mp.y, mp.x + mp.width, mp.y);
+      }
+    }
+
+    // Animated decorations (abyss fog)
+    if (this.decoGraphics) {
+      for (const d of this.map.decorations) {
+        if (d.type === 'abyssFog') {
+          // Need to redraw the deco layer for animated fog
+          this.decoGraphics.clear();
+          this.drawDecorations(this.decoGraphics, time);
+          break;
+        }
       }
     }
   }
@@ -253,14 +363,17 @@ export class MapRenderer {
     g.fillStyle(map.bgColor, 1);
     g.fillRect(cx - w / 2, cy - h / 2, w, h);
 
-    // Ground
     const groundLocalY = map.groundY * scaleY;
-    g.fillStyle(map.groundColor, 1);
-    g.fillRect(cx - w / 2, cy - h / 2 + groundLocalY, w, h - groundLocalY);
 
-    // Ground line
-    g.lineStyle(1, map.groundLineColor, 1);
-    g.lineBetween(cx - w / 2, cy - h / 2 + groundLocalY, cx + w / 2, cy - h / 2 + groundLocalY);
+    if (!map.noGround) {
+      // Ground
+      g.fillStyle(map.groundColor, 1);
+      g.fillRect(cx - w / 2, cy - h / 2 + groundLocalY, w, h - groundLocalY);
+
+      // Ground line
+      g.lineStyle(1, map.groundLineColor, 1);
+      g.lineBetween(cx - w / 2, cy - h / 2 + groundLocalY, cx + w / 2, cy - h / 2 + groundLocalY);
+    }
 
     // Platforms
     for (const p of map.platforms) {
@@ -274,7 +387,21 @@ export class MapRenderer {
       g.lineBetween(px, py, px + pw, py);
     }
 
-    // Lava hint (static for preview)
+    // Moving platforms (static preview at base position)
+    if (map.movingPlatforms) {
+      for (const mp of map.movingPlatforms) {
+        const px = cx - w / 2 + mp.x * scaleX;
+        const py = cy - h / 2 + mp.y * scaleY;
+        const pw = mp.width * scaleX;
+        const ph = Math.max(mp.height * scaleY, 2);
+        g.fillStyle(mp.color, 1);
+        g.fillRect(px, py, pw, ph);
+        g.lineStyle(1, mp.lineColor, 1);
+        g.lineBetween(px, py, px + pw, py);
+      }
+    }
+
+    // Hazard hints (static for preview)
     for (const hazard of map.hazards) {
       if (hazard.type === 'lava') {
         const lavaY = cy - h / 2 + hazard.y * scaleY;
@@ -282,6 +409,18 @@ export class MapRenderer {
         g.fillRect(cx - w / 2, lavaY + 2, w, h - (hazard.y * scaleY) - 2);
         g.lineStyle(1, hazard.color3, 0.8);
         g.lineBetween(cx - w / 2, lavaY, cx + w / 2, lavaY);
+      } else if (hazard.type === 'spikes') {
+        const spikeY = cy - h / 2 + hazard.y * scaleY;
+        const spikeColor = hazard.color || 0xcc3333;
+        // Simplified spikes: a colored strip
+        g.fillStyle(spikeColor, 0.7);
+        g.fillRect(cx - w / 2, spikeY, w, h - (hazard.y * scaleY));
+        // Small triangles hint
+        const spikeW = 6;
+        for (let sx = cx - w / 2; sx < cx + w / 2; sx += spikeW) {
+          g.fillStyle(spikeColor, 0.9);
+          g.fillTriangle(sx, spikeY + 4, sx + spikeW, spikeY + 4, sx + spikeW / 2, spikeY);
+        }
       }
     }
 
@@ -316,5 +455,7 @@ export class MapRenderer {
     if (this.decoGraphics) this.decoGraphics.destroy();
     if (this.platformGraphics) this.platformGraphics.destroy();
     if (this.lavaGraphics) this.lavaGraphics.destroy();
+    if (this.movingPlatGraphics) this.movingPlatGraphics.destroy();
+    if (this.spikeGraphics) this.spikeGraphics.destroy();
   }
 }

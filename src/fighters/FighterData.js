@@ -18,6 +18,8 @@ export const FIGHTERS = [
     specialType: 'lunge',
     specialName: 'Dash Strike',
     specialDuration: 500,
+    wallSpecialType: 'wallPinRush',
+    wallSpecialName: 'Pin Rush',
     visual: {
       headRadius: 1.0,
       lineWidth: 0.85,
@@ -51,6 +53,8 @@ export const FIGHTERS = [
     specialType: 'groundPound',
     specialName: 'Ground Pound',
     specialDuration: 900,
+    wallSpecialType: 'wallCrusher',
+    wallSpecialName: 'Wall Crush',
     visual: {
       headRadius: 1.2,
       lineWidth: 1.4,
@@ -83,6 +87,8 @@ export const FIGHTERS = [
     specialType: 'teleport',
     specialName: 'Shadow Step',
     specialDuration: 550,
+    wallSpecialType: 'wallShadowStrike',
+    wallSpecialName: 'Shadow Pin',
     maxHealth: 80,
     visual: {
       headRadius: 0.85,
@@ -117,6 +123,8 @@ export const FIGHTERS = [
     specialType: 'uppercut',
     specialName: 'Fire Uppercut',
     specialDuration: 650,
+    wallSpecialType: 'wallInferno',
+    wallSpecialName: 'Inferno Press',
     visual: {
       headRadius: 1.0,
       lineWidth: 1.0,
@@ -149,6 +157,8 @@ export const FIGHTERS = [
     specialType: 'slide',
     specialName: 'Ice Slide',
     specialDuration: 550,
+    wallSpecialType: 'wallIcePin',
+    wallSpecialName: 'Ice Cage',
     visual: {
       headRadius: 1.0,
       lineWidth: 1.0,
@@ -181,6 +191,8 @@ export const FIGHTERS = [
     specialType: 'lightningDrop',
     specialName: 'Lightning Drop',
     specialDuration: 800,
+    wallSpecialType: 'wallVoltage',
+    wallSpecialName: 'Voltage Slam',
     visual: {
       headRadius: 1.0,
       lineWidth: 1.1,
@@ -214,6 +226,8 @@ export const FIGHTERS = [
     specialName: 'Viper Flurry',
     specialHits: 4,
     specialDuration: 700,
+    wallSpecialType: 'wallVenomBarrage',
+    wallSpecialName: 'Venom Barrage',
     visual: {
       headRadius: 0.9,
       lineWidth: 0.8,
@@ -247,6 +261,8 @@ export const FIGHTERS = [
     specialType: 'armorSmash',
     specialName: 'Armor Smash',
     specialDuration: 800,
+    wallSpecialType: 'wallEarthenCrush',
+    wallSpecialName: 'Earthen Crush',
     maxHealth: 120,
     visual: {
       headRadius: 1.35,
@@ -280,6 +296,8 @@ export const FIGHTERS = [
     specialType: 'whirlwind',
     specialName: 'Whirlwind',
     specialDuration: 650,
+    wallSpecialType: 'wallWraithDrive',
+    wallSpecialName: 'Wraith Drive',
     visual: {
       headRadius: 0.9,
       lineWidth: 0.7,
@@ -312,6 +330,8 @@ export const FIGHTERS = [
     specialType: 'explosion',
     specialName: 'Nova Burst',
     specialDuration: 700,
+    wallSpecialType: 'wallSupernovaPin',
+    wallSpecialName: 'Supernova Pin',
     maxHealth: 70,
     visual: {
       headRadius: 1.0,

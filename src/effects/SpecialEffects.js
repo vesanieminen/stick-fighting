@@ -408,6 +408,195 @@ export function spawnComboFinisher(scene, x, y, dir, color, animType) {
   }
 }
 
+export function spawnWallImpact(scene, wallX, impactY, color, wallSpecialType) {
+  // Wall crack lines radiating from impact point
+  const crack = scene.add.graphics().setDepth(3);
+  for (let i = 0; i < 7; i++) {
+    const angle = -Math.PI * 0.4 + (i / 6) * Math.PI * 0.8;
+    const len = 20 + Math.random() * 40;
+    const midX = wallX + Math.cos(angle) * len * 0.5 + (Math.random() - 0.5) * 6;
+    const midY = impactY + Math.sin(angle) * len * 0.5;
+    const endX = wallX + Math.cos(angle) * len;
+    const endY = impactY + Math.sin(angle) * len * 0.4;
+    crack.lineStyle(2, 0xcccccc, 0.8);
+    crack.lineBetween(wallX, impactY, midX, midY);
+    crack.lineBetween(midX, midY, endX, endY);
+  }
+  scene.tweens.add({ targets: crack, alpha: 0, duration: 1500, onComplete: () => crack.destroy() });
+
+  // Directional particle burst away from wall
+  const burstDir = wallX < 640 ? 1 : -1;
+  const pg = scene.add.graphics().setDepth(12);
+  const particles = [];
+  for (let i = 0; i < 12; i++) {
+    particles.push({
+      x: wallX,
+      y: impactY + (Math.random() - 0.5) * 40,
+      vx: burstDir * (80 + Math.random() * 200),
+      vy: -60 + (Math.random() - 0.5) * 180,
+      size: 2 + Math.random() * 3,
+    });
+  }
+  scene.tweens.addCounter({
+    from: 0, to: 1, duration: 500,
+    onUpdate: (tween) => {
+      pg.clear();
+      const t = tween.getValue();
+      particles.forEach(p => {
+        p.x += p.vx * 0.016;
+        p.y += p.vy * 0.016;
+        p.vy += 100 * 0.016;
+        pg.fillStyle(color, 1 - t);
+        pg.fillCircle(p.x, p.y, p.size * (1 - t * 0.5));
+      });
+    },
+    onComplete: () => pg.destroy()
+  });
+
+  // Type-specific extras
+  switch (wallSpecialType) {
+    case 'wallPinRush': {
+      // Rapid multi-hit sparks along wall
+      for (let i = 0; i < 5; i++) {
+        scene.time.delayedCall(i * 40, () => {
+          const sg = scene.add.graphics().setDepth(12);
+          const sy = impactY - 20 + i * 10;
+          for (let j = 0; j < 4; j++) {
+            const a = Math.random() * Math.PI * 2;
+            const l = 8 + Math.random() * 12;
+            sg.lineStyle(2, 0xffffff, 0.8);
+            sg.lineBetween(wallX, sy, wallX + Math.cos(a) * l, sy + Math.sin(a) * l);
+          }
+          scene.tweens.add({ targets: sg, alpha: 0, duration: 150, onComplete: () => sg.destroy() });
+        });
+      }
+      break;
+    }
+    case 'wallCrusher': {
+      // Large dust cloud + screen flash
+      const dust = scene.add.graphics().setDepth(8);
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 10 + Math.random() * 30;
+        dust.fillStyle(0x888888, 0.5);
+        dust.fillCircle(wallX + Math.cos(a) * d, impactY + Math.sin(a) * d, 5 + Math.random() * 8);
+      }
+      scene.tweens.add({ targets: dust, alpha: 0, duration: 600, onComplete: () => dust.destroy() });
+      break;
+    }
+    case 'wallShadowStrike': {
+      // Dark slash marks on wall
+      const sl = scene.add.graphics().setDepth(12);
+      for (let i = 0; i < 3; i++) {
+        const a = -0.4 + i * 0.4;
+        const l = 25 + Math.random() * 15;
+        sl.lineStyle(3, 0xbb44ff, 0.9);
+        sl.lineBetween(wallX - Math.cos(a) * l, impactY - Math.sin(a) * l,
+                        wallX + Math.cos(a) * l, impactY + Math.sin(a) * l);
+      }
+      scene.tweens.add({ targets: sl, alpha: 0, duration: 300, onComplete: () => sl.destroy() });
+      break;
+    }
+    case 'wallInferno': {
+      // Fire burst at wall
+      spawnFireParticles(scene, wallX, impactY, 0xff6600, 14);
+      const flame = scene.add.graphics().setDepth(10);
+      flame.fillStyle(0xff3300, 0.4);
+      flame.fillCircle(wallX, impactY, 35);
+      flame.fillStyle(0xffcc00, 0.3);
+      flame.fillCircle(wallX, impactY, 20);
+      scene.tweens.add({ targets: flame, alpha: 0, duration: 400, onComplete: () => flame.destroy() });
+      break;
+    }
+    case 'wallIcePin': {
+      // Ice crystal cage forming at wall
+      const ice = scene.add.graphics().setDepth(12);
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI / 2 + (i / 5) * Math.PI;
+        const r = 30 + Math.random() * 15;
+        const px = wallX + Math.cos(a) * r;
+        const py = impactY + Math.sin(a) * r;
+        const s = 4 + Math.random() * 6;
+        ice.fillStyle(0x66ccff, 0.7);
+        ice.fillTriangle(px, py - s, px - s * 0.6, py + s * 0.5, px + s * 0.6, py + s * 0.5);
+      }
+      ice.lineStyle(2, 0xaaeeff, 0.5);
+      ice.strokeCircle(wallX, impactY, 35);
+      scene.tweens.add({ targets: ice, alpha: 0, duration: 800, onComplete: () => ice.destroy() });
+      break;
+    }
+    case 'wallVoltage': {
+      // Lightning cascade along wall
+      for (let i = 0; i < 3; i++) {
+        const y1 = impactY - 50 + i * 50;
+        const y2 = y1 + 40;
+        spawnLightningBolt(scene, wallX - 10, y1, wallX + 10, y2, 0xffff00);
+      }
+      spawnElectricSparks(scene, wallX, impactY, 0xffff00, 10);
+      break;
+    }
+    case 'wallVenomBarrage': {
+      // Rapid green slash marks
+      for (let i = 0; i < 4; i++) {
+        scene.time.delayedCall(i * 50, () => {
+          spawnSlashMark(scene, wallX - burstDir * 30, impactY - 15 + i * 10, burstDir, 0x44ff44);
+        });
+      }
+      break;
+    }
+    case 'wallEarthenCrush': {
+      // Large ground crack + rock debris
+      spawnGroundCrack(scene, wallX, impactY + 30, 0xaa8855);
+      const rocks = scene.add.graphics().setDepth(10);
+      for (let i = 0; i < 8; i++) {
+        const rx = wallX + (Math.random() - 0.5) * 50;
+        const ry = impactY + (Math.random() - 0.5) * 40;
+        rocks.fillStyle(0x886644, 0.7);
+        rocks.fillRect(rx, ry, 4 + Math.random() * 6, 4 + Math.random() * 6);
+      }
+      scene.tweens.add({ targets: rocks, alpha: 0, duration: 700, onComplete: () => rocks.destroy() });
+      break;
+    }
+    case 'wallSupernovaPin': {
+      // Compressed explosion at wall
+      const exp = scene.add.graphics().setDepth(15);
+      scene.tweens.addCounter({
+        from: 5, to: 50, duration: 300,
+        onUpdate: (tween) => {
+          exp.clear();
+          const r = tween.getValue();
+          const t = (r - 5) / 45;
+          exp.lineStyle(4, 0xff3366, (1 - t) * 0.9);
+          exp.strokeCircle(wallX, impactY, r);
+          exp.fillStyle(0xffffff, (1 - t) * 0.3);
+          exp.fillCircle(wallX, impactY, r * 0.5);
+        },
+        onComplete: () => exp.destroy()
+      });
+      break;
+    }
+    case 'wallWraithDrive': {
+      // Ghostly wisps at impact
+      const wisps = scene.add.graphics().setDepth(10);
+      scene.tweens.addCounter({
+        from: 0, to: 1, duration: 500,
+        onUpdate: (tween) => {
+          wisps.clear();
+          const t = tween.getValue();
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2 + t * 4;
+            const r = 15 + t * 25;
+            wisps.fillStyle(0xddddff, (1 - t) * 0.5);
+            wisps.fillCircle(wallX + Math.cos(a) * r, impactY + Math.sin(a) * r, 4);
+          }
+        },
+        onComplete: () => wisps.destroy()
+      });
+      break;
+    }
+  }
+}
+
 export function spawnGroundCrack(scene, x, y, color = 0x888888) {
   const g = scene.add.graphics().setDepth(3);
   for (let i = 0; i < 5; i++) {

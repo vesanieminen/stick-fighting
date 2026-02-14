@@ -31,8 +31,12 @@ export class FightScene extends Phaser.Scene {
     const mapIndex = this.registry.get('selectedMap') || 0;
     this.mapData = MAPS[mapIndex] || MAPS[0];
     this.hasLava = this.mapData.hazards.some(h => h.type === 'lava');
+    this.hasSpikes = this.mapData.hazards.some(h => h.type === 'spikes');
+    this.isBottomless = !!this.mapData.bottomless;
     this.lavaDmgTimer1 = 0;
     this.lavaDmgTimer2 = 0;
+    this.spikeDmgTimer1 = 0;
+    this.spikeDmgTimer2 = 0;
 
     this.createArena();
     this.createFighters();
@@ -48,16 +52,20 @@ export class FightScene extends Phaser.Scene {
     this.mapRenderer = new MapRenderer(this, map);
     this.mapRenderer.draw();
 
-    // Set physics world bounds using map data
+    // Set physics world bounds — for bottomless maps, extend downward so fighters can fall
+    const worldHeight = this.isBottomless ? (map.deathY || 800) + 200 : map.groundY;
     this.physics.world.setBounds(
       map.stageLeft, 0,
       map.stageRight - map.stageLeft,
-      map.groundY
+      worldHeight
     );
 
-    // Ground collider (static body)
-    this.ground = this.add.zone(640, map.groundY + 10, 1280, 20);
-    this.physics.add.existing(this.ground, true);
+    // Ground collider (only for non-bottomless maps)
+    this.ground = null;
+    if (!map.bottomless) {
+      this.ground = this.add.zone(640, map.groundY + 10, 1280, 20);
+      this.physics.add.existing(this.ground, true);
+    }
 
     // Platform colliders (one-way: can jump through from below, land on top)
     this.platformBodies = [];
@@ -69,6 +77,18 @@ export class FightScene extends Phaser.Scene {
       zone.body.checkCollision.left = false;
       zone.body.checkCollision.right = false;
       this.platformBodies.push(zone);
+    }
+
+    // Moving platform colliders
+    this.movingPlatBodies = [];
+    this.movingPlatDefs = map.movingPlatforms || [];
+    for (const mp of this.movingPlatDefs) {
+      const zone = this.add.zone(mp.x + mp.width / 2, mp.y + mp.height / 2, mp.width, mp.height);
+      this.physics.add.existing(zone, true);
+      zone.body.checkCollision.down = false;
+      zone.body.checkCollision.left = false;
+      zone.body.checkCollision.right = false;
+      this.movingPlatBodies.push(zone);
     }
   }
 
@@ -92,12 +112,30 @@ export class FightScene extends Phaser.Scene {
     this.fighter1.opponent = this.fighter2;
     this.fighter2.opponent = this.fighter1;
 
-    // Ground collision
-    this.physics.add.collider(this.fighter1.body, this.ground);
-    this.physics.add.collider(this.fighter2.body, this.ground);
+    // Wall combo: let fighters check if opponent is near a wall
+    this.fighter1.opponentNearWallFn = () => this.isNearWall(this.fighter2);
+    this.fighter2.opponentNearWallFn = () => this.isNearWall(this.fighter1);
+
+    // Set ragdoll ground Y for bottomless maps
+    if (this.isBottomless) {
+      this.fighter1._ragdollGroundY = 2000;
+      this.fighter2._ragdollGroundY = 2000;
+    }
+
+    // Ground collision (only if ground exists)
+    if (this.ground) {
+      this.physics.add.collider(this.fighter1.body, this.ground);
+      this.physics.add.collider(this.fighter2.body, this.ground);
+    }
 
     // Platform collisions for both fighters
     for (const plat of this.platformBodies) {
+      this.physics.add.collider(this.fighter1.body, plat);
+      this.physics.add.collider(this.fighter2.body, plat);
+    }
+
+    // Moving platform collisions
+    for (const plat of this.movingPlatBodies) {
       this.physics.add.collider(this.fighter1.body, plat);
       this.physics.add.collider(this.fighter2.body, plat);
     }
@@ -420,7 +458,10 @@ export class FightScene extends Phaser.Scene {
       return;
     }
 
-    // Update animated map elements (lava, etc.)
+    // Update moving platforms
+    this.updateMovingPlatforms(time);
+
+    // Update animated map elements (lava, moving platform visuals, etc.)
     if (this.mapRenderer) {
       this.mapRenderer.update(time);
     }
@@ -481,6 +522,18 @@ export class FightScene extends Phaser.Scene {
     if (this.hasLava) {
       this.checkLavaDamage(this.fighter1, delta, 1);
       this.checkLavaDamage(this.fighter2, delta, 2);
+    }
+
+    // Spike damage
+    if (this.hasSpikes) {
+      this.checkSpikeDamage(this.fighter1, delta, 1);
+      this.checkSpikeDamage(this.fighter2, delta, 2);
+    }
+
+    // Fall death (bottomless maps)
+    if (this.isBottomless) {
+      this.checkFallDeath(this.fighter1);
+      this.checkFallDeath(this.fighter2);
     }
 
     // Hit detection
@@ -547,6 +600,145 @@ export class FightScene extends Phaser.Scene {
     });
   }
 
+  updateMovingPlatforms(time) {
+    if (this.movingPlatDefs.length === 0) return;
+
+    const positions = [];
+    for (let i = 0; i < this.movingPlatDefs.length; i++) {
+      const def = this.movingPlatDefs[i];
+      const body = this.movingPlatBodies[i];
+      const t = time * 0.001 * def.speed;
+
+      // Oscillate with sine wave
+      const offsetX = Math.sin(t) * def.moveX;
+      const offsetY = Math.sin(t) * def.moveY;
+
+      const prevX = body.x;
+      const newX = def.x + def.width / 2 + offsetX;
+      const newY = def.y + def.height / 2 + offsetY;
+
+      body.setPosition(newX, newY);
+      body.body.updateFromGameObject();
+
+      // Carry fighters standing on this platform
+      const deltaX = newX - prevX;
+      if (Math.abs(deltaX) > 0.01) {
+        this.carryFighterOnPlatform(this.fighter1, body, deltaX);
+        this.carryFighterOnPlatform(this.fighter2, body, deltaX);
+      }
+
+      positions.push({
+        x: newX - def.width / 2,
+        y: newY - def.height / 2,
+        width: def.width,
+        height: def.height,
+        color: def.color,
+        lineColor: def.lineColor,
+      });
+    }
+
+    // Pass positions to renderer for visual sync
+    if (this.mapRenderer) {
+      this.mapRenderer.movingPlatformPositions = positions;
+    }
+  }
+
+  carryFighterOnPlatform(fighter, platform, deltaX) {
+    if (fighter.state === 'KO') return;
+    // Check if fighter is standing on this platform (blocked.down + overlapping horizontally)
+    if (!fighter.body.body.blocked.down) return;
+
+    const fBody = fighter.body.body;
+    const pBody = platform.body;
+
+    // Fighter feet Y vs platform top Y — must be close
+    const feetY = fBody.y + fBody.halfHeight;
+    const platTop = pBody.y - pBody.halfHeight;
+    if (Math.abs(feetY - platTop) > 8) return;
+
+    // Horizontal overlap check
+    const fLeft = fBody.x - fBody.halfWidth;
+    const fRight = fBody.x + fBody.halfWidth;
+    const pLeft = pBody.x - pBody.halfWidth;
+    const pRight = pBody.x + pBody.halfWidth;
+    if (fRight < pLeft || fLeft > pRight) return;
+
+    // Carry the fighter
+    fighter.body.x += deltaX;
+  }
+
+  checkSpikeDamage(fighter, delta, playerNum) {
+    const feetY = fighter.body.y + GAME_CONFIG.BODY_HEIGHT / 2;
+    const spikeHazard = this.mapData.hazards.find(h => h.type === 'spikes');
+    if (!spikeHazard) return;
+    const spikeY = spikeHazard.y;
+
+    if (feetY < spikeY - 5) return;
+    if (fighter.state === 'KO') return;
+
+    // Tick damage every 400ms
+    const timerKey = playerNum === 1 ? 'spikeDmgTimer1' : 'spikeDmgTimer2';
+    this[timerKey] += delta;
+    if (this[timerKey] < 400) return;
+    this[timerKey] = 0;
+
+    // Heavy damage + upward launch
+    const dmg = 50;
+    fighter.health -= dmg;
+    fighter.health = Math.max(0, fighter.health);
+    fighter.body.body.setVelocityY(-500);
+
+    // Visual feedback
+    this.createSpikeSpark(fighter.body.x, spikeY);
+    this.cameras.main.shake(150, 0.01);
+    SoundManager.hit();
+
+    if (fighter.health <= 0) {
+      fighter.createRagdoll(0, -500);
+      fighter.enterState('KO');
+      fighter.canAct = false;
+    }
+  }
+
+  createSpikeSpark(x, y) {
+    const g = this.add.graphics().setDepth(50);
+    for (let i = 0; i < 8; i++) {
+      const angle = -Math.PI * (0.1 + Math.random() * 0.8);
+      const len = 8 + Math.random() * 12;
+      const color = [0xff3333, 0xff6666, 0xffaaaa][i % 3];
+      g.lineStyle(2, color, 1);
+      g.lineBetween(x, y, x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+    }
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 300,
+      onComplete: () => g.destroy()
+    });
+  }
+
+  checkFallDeath(fighter) {
+    if (fighter.state === 'KO') return;
+    const deathY = this.mapData.deathY || 800;
+    const feetY = fighter.body.y + GAME_CONFIG.BODY_HEIGHT / 2;
+
+    if (feetY > deathY) {
+      // Instant KO
+      fighter.health = 0;
+      fighter.createRagdoll(0, 200, 2000);
+      fighter.enterState('KO');
+      fighter.canAct = false;
+      SoundManager.ko();
+      this.cameras.main.shake(200, 0.008);
+    }
+  }
+
+  isNearWall(fighter) {
+    const stageLeft = this.mapData.stageLeft ?? GAME_CONFIG.STAGE_LEFT;
+    const stageRight = this.mapData.stageRight ?? GAME_CONFIG.STAGE_RIGHT;
+    return fighter.x < stageLeft + 60 || fighter.x > stageRight - 60;
+  }
+
   updateFacing() {
     if (this.fighter1.x < this.fighter2.x) {
       this.fighter1.setFacing(true);
@@ -571,11 +763,13 @@ export class FightScene extends Phaser.Scene {
       const knockDir = attacker.facingRight ? 1 : -1;
       const wasBlocking = defender.state === 'BLOCK';
       const isComboFinisher = attacker.state === 'COMBO_FINISHER';
+      const isWallSpecial = attacker.state === 'WALL_SPECIAL';
       const isComboHit = attacker.comboChain.length > 0;
 
-      // Pass attack flags (e.g. blockPiercing) to takeDamage
+      // Pass attack flags (e.g. blockPiercing, knockbackY) to takeDamage
       defender.takeDamage(attackData.damage, knockDir * attackData.knockback, {
         blockPiercing: attackData.blockPiercing || false,
+        knockbackY: attackData.knockbackY || undefined,
       });
 
       // Hit spark at the intersection of hitbox and hurtbox (on the defender)
@@ -596,8 +790,19 @@ export class FightScene extends Phaser.Scene {
       } else {
         SoundManager.hit();
 
-        // Hitstop on combo hits
-        if (isComboFinisher) {
+        // Track wall combo hits on successful punches (not blocked)
+        const isPunch = attacker.state === 'PUNCH' || attacker.state === 'CROUCH_PUNCH';
+        if (isPunch) {
+          attacker.registerWallComboHit();
+        }
+
+        // Hitstop on wall special / combo hits
+        if (isWallSpecial) {
+          attacker.applyHitstop(150);
+          defender.applyHitstop(150);
+          this.cameras.main.shake(300, 0.025);
+          this.showWallSpecialText(attacker);
+        } else if (isComboFinisher) {
           // COMBO_FINISHER non-blocked: 120ms hitstop, bigger shake, finisher VFX
           attacker.applyHitstop(120);
           defender.applyHitstop(120);
@@ -615,8 +820,8 @@ export class FightScene extends Phaser.Scene {
         }
       }
 
-      // Visual feedback - screen shake (unless finisher already shook)
-      if (!isComboFinisher || wasBlocking) {
+      // Visual feedback - screen shake (unless finisher/wall special already shook)
+      if ((!isComboFinisher && !isWallSpecial) || wasBlocking) {
         this.cameras.main.shake(100, 0.005 * attackData.damage);
       }
 
@@ -662,6 +867,29 @@ export class FightScene extends Phaser.Scene {
         onComplete: () => text.destroy()
       });
     }
+  }
+
+  showWallSpecialText(fighter) {
+    const fighterColor = `#${fighter.data.color.toString(16).padStart(6, '0')}`;
+    const textY = fighter.y - GAME_CONFIG.BODY_HEIGHT;
+    const name = fighter.data.wallSpecialName || 'WALL COMBO!';
+
+    const shadow = this.add.text(fighter.x + 2, textY + 2, name, {
+      fontSize: '40px', fontFamily: 'monospace', color: '#000000', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(99).setAlpha(0.6);
+
+    const text = this.add.text(fighter.x, textY, name, {
+      fontSize: '40px', fontFamily: 'monospace', color: fighterColor, fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(100);
+
+    this.tweens.add({
+      targets: [text, shadow],
+      y: '-=60',
+      alpha: 0,
+      duration: 1000,
+      ease: 'Power2',
+      onComplete: () => { text.destroy(); shadow.destroy(); }
+    });
   }
 
   createHitSpark(x, y, isBlocked) {
