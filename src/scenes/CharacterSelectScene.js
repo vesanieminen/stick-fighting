@@ -17,6 +17,9 @@ export class CharacterSelectScene extends Phaser.Scene {
   }
 
   create() {
+    this.playerCount = this.registry.get('playerCount') || 2;
+    this.isCPU = this.playerCount === 1;
+
     this.p1Index = 0;
     this.p2Index = 1;
     this.p1Locked = false;
@@ -27,7 +30,10 @@ export class CharacterSelectScene extends Phaser.Scene {
       fontSize: '36px', fontFamily: 'monospace', color: '#ffffff', fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    this.add.text(640, 80, 'P1: WASD + J to lock    P2: Arrows + , to lock', {
+    const instructionsText = this.isCPU
+      ? 'P1: WASD + J to lock'
+      : 'P1: WASD + J to lock    P2: Arrows + , to lock';
+    this.add.text(640, 80, instructionsText, {
       fontSize: '14px', fontFamily: 'monospace', color: '#666666'
     }).setOrigin(0.5);
 
@@ -87,7 +93,7 @@ export class CharacterSelectScene extends Phaser.Scene {
       fontSize: '20px', fontFamily: 'monospace', color: '#ffcc00', fontStyle: 'bold'
     }).setOrigin(0.5);
 
-    this.add.text(1080, 495, 'PLAYER 2', {
+    this.add.text(1080, 495, this.isCPU ? 'CPU' : 'PLAYER 2', {
       fontSize: '20px', fontFamily: 'monospace', color: '#ffcc00', fontStyle: 'bold'
     }).setOrigin(0.5);
 
@@ -157,25 +163,27 @@ export class CharacterSelectScene extends Phaser.Scene {
       this.unlock(1);
     }
 
-    // P2 navigation
-    if (!this.p2Locked) {
-      if (Phaser.Input.Keyboard.JustDown(this.p2Keys.left) || this.padJustPressed(2, 'left')) {
-        this.moveSelection(2, -1, 0);
+    // P2 navigation (disabled for CPU)
+    if (!this.isCPU) {
+      if (!this.p2Locked) {
+        if (Phaser.Input.Keyboard.JustDown(this.p2Keys.left) || this.padJustPressed(2, 'left')) {
+          this.moveSelection(2, -1, 0);
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.p2Keys.right) || this.padJustPressed(2, 'right')) {
+          this.moveSelection(2, 1, 0);
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.p2Keys.up) || this.padJustPressed(2, 'up')) {
+          this.moveSelection(2, 0, -1);
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.p2Keys.down) || this.padJustPressed(2, 'down')) {
+          this.moveSelection(2, 0, 1);
+        }
+        if (Phaser.Input.Keyboard.JustDown(this.p2Keys.confirm) || this.padJustPressed(2, 'A')) {
+          this.lockIn(2);
+        }
+      } else if (Phaser.Input.Keyboard.JustDown(this.p2Keys.cancel) || this.padJustPressed(2, 'B')) {
+        this.unlock(2);
       }
-      if (Phaser.Input.Keyboard.JustDown(this.p2Keys.right) || this.padJustPressed(2, 'right')) {
-        this.moveSelection(2, 1, 0);
-      }
-      if (Phaser.Input.Keyboard.JustDown(this.p2Keys.up) || this.padJustPressed(2, 'up')) {
-        this.moveSelection(2, 0, -1);
-      }
-      if (Phaser.Input.Keyboard.JustDown(this.p2Keys.down) || this.padJustPressed(2, 'down')) {
-        this.moveSelection(2, 0, 1);
-      }
-      if (Phaser.Input.Keyboard.JustDown(this.p2Keys.confirm) || this.padJustPressed(2, 'A')) {
-        this.lockIn(2);
-      }
-    } else if (Phaser.Input.Keyboard.JustDown(this.p2Keys.cancel) || this.padJustPressed(2, 'B')) {
-      this.unlock(2);
     }
 
     this.updatePadPrev();
@@ -258,6 +266,21 @@ export class CharacterSelectScene extends Phaser.Scene {
 
     SoundManager.roundStart();
     this.updateDisplay();
+
+    if (player === 1 && this.isCPU && !this.p2Locked) {
+      // CPU auto-selects a random fighter different from P1
+      let cpuIndex;
+      do {
+        cpuIndex = Math.floor(Math.random() * FIGHTERS.length);
+      } while (cpuIndex === this.p1Index);
+      this.p2Index = cpuIndex;
+      this.updateDisplay();
+      // Auto-lock P2 after a short delay for visual feedback
+      this.time.delayedCall(400, () => {
+        this.lockIn(2);
+      });
+      return;
+    }
 
     if (this.p1Locked && this.p2Locked) {
       this.time.delayedCall(500, () => this.startFight());

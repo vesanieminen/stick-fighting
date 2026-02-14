@@ -20,7 +20,9 @@ export class ResultScene extends Phaser.Scene {
     const loserData = winner === 0 ? FIGHTERS[p2Idx] : FIGHTERS[p1Idx];
 
     SoundManager.victory();
-    const winnerName = winner === 0 ? 'PLAYER 1' : 'PLAYER 2';
+    const playerCount = this.registry.get('playerCount') || 2;
+    const p2Label = playerCount === 1 ? 'CPU' : 'PLAYER 2';
+    const winnerName = winner === 0 ? 'PLAYER 1' : p2Label;
 
     // Winner announcement
     this.add.text(640, 120, `${winnerName} WINS!`, {

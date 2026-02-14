@@ -5,6 +5,7 @@ import { FIGHTERS } from '../fighters/FighterData.js';
 import { MAPS } from '../maps/MapData.js';
 import { MapRenderer } from '../maps/MapRenderer.js';
 import { InputManager } from '../input/InputManager.js';
+import { AIController } from '../input/AIController.js';
 import { HealthBar } from '../ui/HealthBar.js';
 import { RoundIndicator } from '../ui/RoundIndicator.js';
 import { SoundManager } from '../audio/SoundManager.js';
@@ -105,7 +106,12 @@ export class FightScene extends Phaser.Scene {
 
     // Input managers
     this.p1Input = new InputManager(this, 0);
-    this.p2Input = new InputManager(this, 1);
+    const playerCount = this.registry.get('playerCount') || 2;
+    if (playerCount === 1) {
+      this.p2Input = new AIController(this, this.fighter2, this.fighter1);
+    } else {
+      this.p2Input = new InputManager(this, 1);
+    }
   }
 
   createUI() {
