@@ -28,9 +28,9 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','PUNCH','KICK'], damageScale: [1,1.1,1.3], durationScale: [1,0.7,0.85], finisher: true },
-        { sequence: ['PUNCH','KICK'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
-        { sequence: ['KICK','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.75,0.8], finisher: true },
+        { sequence: ['PUNCH','PUNCH','KICK'], damageScale: [1,1.1,1.3], durationScale: [1,0.7,0.85], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.75,0.8], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.35,
     },
@@ -61,8 +61,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','KICK'], damageScale: [1,1.4], durationScale: [1,0.9], finisher: true },
-        { sequence: ['KICK','KICK'], damageScale: [1,1.5], durationScale: [1,0.9], finisher: true },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.4], durationScale: [1,0.9], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','KICK'], damageScale: [1,1.5], durationScale: [1,0.9], finisher: true, finisherAnim: 'launch' },
       ],
       cancelWindowRatio: 0.25,
     },
@@ -94,9 +94,9 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.65,0.6], finisher: true },
-        { sequence: ['PUNCH','KICK'], damageScale: [1,1.2], durationScale: [1,0.75], finisher: true },
-        { sequence: ['KICK','PUNCH'], damageScale: [1,1.1], durationScale: [1,0.7], finisher: true },
+        { sequence: ['PUNCH','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.65,0.6], finisher: true, finisherAnim: 'strike' },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.2], durationScale: [1,0.75], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.1], durationScale: [1,0.7], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.35,
     },
@@ -127,8 +127,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','PUNCH','KICK'], damageScale: [1,1.1,1.4], durationScale: [1,0.75,0.85], finisher: true },
-        { sequence: ['KICK','PUNCH'], damageScale: [1,1.3], durationScale: [1,0.8], finisher: true },
+        { sequence: ['PUNCH','PUNCH','KICK'], damageScale: [1,1.1,1.4], durationScale: [1,0.75,0.85], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.3], durationScale: [1,0.8], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.3,
     },
@@ -159,8 +159,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','KICK'], damageScale: [1,1.3], durationScale: [1,0.85], finisher: true },
-        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.3], durationScale: [1,0.85], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.28,
     },
@@ -191,8 +191,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','KICK','PUNCH'], damageScale: [1,1.1,1.3], durationScale: [1,0.8,0.75], finisher: true },
-        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+        { sequence: ['PUNCH','KICK','PUNCH'], damageScale: [1,1.1,1.3], durationScale: [1,0.8,0.75], finisher: true, finisherAnim: 'strike' },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.3,
     },
@@ -224,9 +224,9 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','PUNCH','PUNCH','KICK'], damageScale: [1,1.0,1.1,1.4], durationScale: [1,0.6,0.55,0.7], finisher: true },
-        { sequence: ['PUNCH','KICK','PUNCH'], damageScale: [1,1.1,1.3], durationScale: [1,0.7,0.65], finisher: true },
-        { sequence: ['KICK','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.65,0.6], finisher: true },
+        { sequence: ['PUNCH','PUNCH','PUNCH','KICK'], damageScale: [1,1.0,1.1,1.4], durationScale: [1,0.6,0.55,0.7], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['PUNCH','KICK','PUNCH'], damageScale: [1,1.1,1.3], durationScale: [1,0.7,0.65], finisher: true, finisherAnim: 'strike' },
+        { sequence: ['KICK','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.65,0.6], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.38,
     },
@@ -258,8 +258,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','PUNCH'], damageScale: [1,1.5], durationScale: [1,0.9], finisher: true },
-        { sequence: ['KICK','PUNCH'], damageScale: [1,1.4], durationScale: [1,0.85], finisher: true },
+        { sequence: ['PUNCH','PUNCH'], damageScale: [1,1.5], durationScale: [1,0.9], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.4], durationScale: [1,0.85], finisher: true, finisherAnim: 'launch' },
       ],
       cancelWindowRatio: 0.22,
     },
@@ -290,8 +290,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','KICK','KICK'], damageScale: [1,1.1,1.3], durationScale: [1,0.8,0.75], finisher: true },
-        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+        { sequence: ['PUNCH','KICK','KICK'], damageScale: [1,1.1,1.3], durationScale: [1,0.8,0.75], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true, finisherAnim: 'strike' },
       ],
       cancelWindowRatio: 0.3,
     },
@@ -323,8 +323,8 @@ export const FIGHTERS = [
     },
     combos: {
       chains: [
-        { sequence: ['PUNCH','KICK'], damageScale: [1,1.5], durationScale: [1,0.85], finisher: true },
-        { sequence: ['KICK','KICK'], damageScale: [1,1.4], durationScale: [1,0.9], finisher: true },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.5], durationScale: [1,0.85], finisher: true, finisherAnim: 'launch' },
+        { sequence: ['KICK','KICK'], damageScale: [1,1.4], durationScale: [1,0.9], finisher: true, finisherAnim: 'launch' },
       ],
       cancelWindowRatio: 0.28,
     },

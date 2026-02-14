@@ -49,14 +49,14 @@ export class ResultScene extends Phaser.Scene {
     // Winner in victory pose
     const winnerGraphics = this.add.graphics();
     const winnerRenderer = new StickFigureRenderer(winnerGraphics);
-    winnerRenderer.draw(640, 460, POSES.VICTORY[0], true, winnerData.color);
+    winnerRenderer.draw(640, 460, POSES.VICTORY[0], true, winnerData.color, false, winnerData.visual || null);
 
     // Loser in KO pose (on the side)
     const loserGraphics = this.add.graphics();
     const loserRenderer = new StickFigureRenderer(loserGraphics);
     const loserPose = POSES.KO[POSES.KO.length - 1];
     const loserX = winner === 0 ? 900 : 380;
-    loserRenderer.draw(loserX, 480, loserPose, winner !== 0, loserData.color);
+    loserRenderer.draw(loserX, 480, loserPose, winner !== 0, loserData.color, false, loserData.visual || null);
 
     // Play again prompt
     const prompt = this.add.text(640, 620, 'Press ENTER or SPACE to play again', {

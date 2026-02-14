@@ -8,7 +8,7 @@ import {
   spawnFireTrail, spawnIceTrail, spawnIceCrystals, spawnLightningBolt,
   spawnElectricSparks, spawnSlashMark, spawnArmorGlow, spawnWhirlwindArcs,
   spawnChargingAura, spawnExplosionRing, spawnSmokePuff, spawnTeleportFlash,
-  spawnGroundCrack,
+  spawnGroundCrack, spawnComboFinisher,
 } from '../effects/SpecialEffects.js';
 
 const STATES = {
@@ -19,6 +19,7 @@ const STATES = {
   PUNCH: 'PUNCH',
   KICK: 'KICK',
   SPECIAL: 'SPECIAL',
+  COMBO_FINISHER: 'COMBO_FINISHER',
   BLOCK: 'BLOCK',
   CROUCH: 'CROUCH',
   CROUCH_PUNCH: 'CROUCH_PUNCH',
@@ -63,6 +64,10 @@ export class Fighter {
     this.comboDamageScale = 1.0;  // Current combo step damage multiplier
     this.comboDurationScale = 1.0; // Current combo step duration multiplier
     this.comboFinisher = false;   // Whether current hit is a finisher
+    this.comboFinisherAnim = null; // 'strike' or 'launch'
+
+    // Hitstop
+    this.hitstopTimer = 0;
 
     // Physics body using a zone (no texture needed)
     // Place zone so its center is at the right height (body bottom at ground)
@@ -89,6 +94,14 @@ export class Fighter {
   get isCrouching() { return [STATES.CROUCH, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state); }
 
   update(delta, input) {
+    // Hitstop freeze — skip all processing
+    if (this.hitstopTimer > 0) {
+      this.hitstopTimer -= delta;
+      this.body.body.setVelocity(0, 0);
+      this.draw();
+      return;
+    }
+
     this.stateTimer += delta;
     this.animTimer += delta;
     this.specialCooldown = Math.max(0, this.specialCooldown - delta);
@@ -255,6 +268,7 @@ export class Fighter {
       case STATES.PUNCH: case STATES.CROUCH_PUNCH: return GAME_CONFIG.PUNCH_DURATION;
       case STATES.KICK: case STATES.CROUCH_KICK: return GAME_CONFIG.KICK_DURATION;
       case STATES.SPECIAL: return this.specialDuration;
+      case STATES.COMBO_FINISHER: return 450;
       default: return 0;
     }
   }
@@ -306,6 +320,37 @@ export class Fighter {
           this.enterState(STATES.CROUCH);
         }
         break;
+
+      case STATES.COMBO_FINISHER: {
+        const finDur = 450;
+        const dir = this.facingRight ? 1 : -1;
+        const progress = this.stateTimer / finDur;
+
+        // Forward lunge during 20%-50% of duration
+        if (progress >= 0.2 && progress <= 0.5) {
+          this.body.body.setVelocityX(dir * 350);
+        } else if (progress > 0.5) {
+          this.body.body.setVelocityX(0);
+        }
+
+        // VFX trigger at 25%
+        if (this._effectPhase < 1 && progress >= 0.25) {
+          this._effectPhase = 1;
+          spawnComboFinisher(this.scene, this.x + dir * 40, this.y, dir, this.data.color, this.comboFinisherAnim);
+          SoundManager.heavyImpact();
+        }
+
+        // On finish
+        if (this.stateTimer >= finDur) {
+          this.canAct = true;
+          this.hasHit = false;
+          this.resetCombo();
+          this.attackCooldown = GAME_CONFIG.SPECIAL_RECOVERY;
+          this.body.body.setVelocityX(0);
+          this.enterState(STATES.IDLE);
+        }
+        break;
+      }
 
       case STATES.SPECIAL:
         this.updateSpecial(delta);
@@ -360,10 +405,21 @@ export class Fighter {
         this.comboTimer = 0;
         this.comboDamageScale = chain.damageScale[stepIndex] || 1.0;
         this.comboDurationScale = chain.durationScale[stepIndex] || 1.0;
-        this.comboFinisher = chain.finisher && stepIndex === chain.sequence.length - 1;
+        const isFinisher = chain.finisher && stepIndex === chain.sequence.length - 1;
+        this.comboFinisher = isFinisher;
 
         // Chain into next attack with no recovery
         this.attackCooldown = 0;
+
+        if (isFinisher && chain.finisherAnim) {
+          // Enter COMBO_FINISHER state for dramatic finisher
+          this.comboFinisherAnim = chain.finisherAnim;
+          this.comboBuffer = null;
+          this.enterState(STATES.COMBO_FINISHER);
+          this.canAct = false;
+          return;
+        }
+
         const nextState = this.comboBuffer === 'PUNCH' ? STATES.PUNCH : STATES.KICK;
         this.comboBuffer = null;
         this.enterState(nextState);
@@ -407,6 +463,11 @@ export class Fighter {
     this.comboDamageScale = 1.0;
     this.comboDurationScale = 1.0;
     this.comboFinisher = false;
+    this.comboFinisherAnim = null;
+  }
+
+  applyHitstop(ms) {
+    this.hitstopTimer = ms;
   }
 
   updateSpecial(delta) {
@@ -648,10 +709,11 @@ export class Fighter {
       case STATES.PUNCH: case STATES.CROUCH_PUNCH: SoundManager.punch(); break;
       case STATES.KICK: case STATES.CROUCH_KICK: SoundManager.kick(); break;
       case STATES.SPECIAL: SoundManager.special(); break;
+      case STATES.COMBO_FINISHER: SoundManager.special(); break;
       case STATES.JUMP: SoundManager.jump(); break;
     }
 
-    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
+    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
       this.canAct = false;
       this.hasHit = false;
 
@@ -666,7 +728,7 @@ export class Fighter {
       this.timeSinceLastAttack = 0;
     }
 
-    if (newState === STATES.SPECIAL) {
+    if (newState === STATES.SPECIAL || newState === STATES.COMBO_FINISHER) {
       this._effectPhase = 0;
       this._effectTimer = 0;
     }
@@ -683,7 +745,7 @@ export class Fighter {
   }
 
   isAttacking() {
-    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
+    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
   }
 
   isOnActiveFrame() {
@@ -702,6 +764,11 @@ export class Fighter {
         duration = this.state === STATES.KICK ? this.getEffectiveDuration() : GAME_CONFIG.KICK_DURATION;
         activeStart = duration * 0.25;
         activeEnd = duration * 0.6;
+        break;
+      case STATES.COMBO_FINISHER:
+        duration = 450;
+        activeStart = duration * 0.25;
+        activeEnd = duration * 0.55;
         break;
       case STATES.SPECIAL:
         duration = this.specialDuration;
@@ -752,6 +819,14 @@ export class Fighter {
           range: this.data.kickRange,
           knockback: GAME_CONFIG.KICK_KNOCKBACK * finisherKnockbackScale,
           isCrouchAttack: false,
+        };
+      case STATES.COMBO_FINISHER:
+        return {
+          damage: Math.round(this.data.kickDamage * comboScale),
+          range: Math.max(this.data.punchRange, this.data.kickRange) + 15,
+          knockback: GAME_CONFIG.SPECIAL_KNOCKBACK,
+          isCrouchAttack: false,
+          blockPiercing: true,
         };
       case STATES.SPECIAL:
         return {
@@ -859,7 +934,7 @@ export class Fighter {
     );
   }
 
-  takeDamage(amount, knockbackX) {
+  takeDamage(amount, knockbackX, attackFlags = {}) {
     // Armor absorbs the hit without stun (Golem's armorSmash)
     if (this.armorActive) {
       this.health -= amount * 0.3; // Still take some chip damage
@@ -870,8 +945,14 @@ export class Fighter {
     const isBlocking = this.state === STATES.BLOCK;
 
     if (isBlocking) {
-      this.health -= amount * (1 - GAME_CONFIG.BLOCK_DAMAGE_REDUCTION);
-      this.body.body.setVelocityX(knockbackX * 0.3);
+      if (attackFlags.blockPiercing) {
+        // Block piercing: only 40% reduction (vs normal 80%), more pushback
+        this.health -= amount * 0.6;
+        this.body.body.setVelocityX(knockbackX * 0.6);
+      } else {
+        this.health -= amount * (1 - GAME_CONFIG.BLOCK_DAMAGE_REDUCTION);
+        this.body.body.setVelocityX(knockbackX * 0.3);
+      }
     } else {
       this.health -= amount;
       this.body.body.setVelocityX(knockbackX);
@@ -923,11 +1004,15 @@ export class Fighter {
     this.lastAttackType = null;
     this.sameAttackCount = 0;
     this.timeSinceLastAttack = 0;
+    this.hitstopTimer = 0;
     this.resetCombo();
   }
 
   draw() {
-    const poses = POSES[this.state];
+    const poseKey = this.state === STATES.COMBO_FINISHER
+      ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
+      : this.state;
+    const poses = POSES[poseKey];
     if (!poses) return;
 
     let pose;
@@ -943,6 +1028,7 @@ export class Fighter {
         case STATES.PUNCH: case STATES.CROUCH_PUNCH: totalDuration = this.getEffectiveDuration(); break;
         case STATES.KICK: case STATES.CROUCH_KICK: totalDuration = this.getEffectiveDuration(); break;
         case STATES.SPECIAL: totalDuration = this.specialDuration; break;
+        case STATES.COMBO_FINISHER: totalDuration = 450; break;
         case STATES.KO: totalDuration = 800; break;
         case STATES.JUMP: totalDuration = 600; break;
         case STATES.HIT: totalDuration = GAME_CONFIG.HITSTUN_DURATION; break;

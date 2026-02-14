@@ -9,6 +9,7 @@ import { AIController } from '../input/AIController.js';
 import { HealthBar } from '../ui/HealthBar.js';
 import { RoundIndicator } from '../ui/RoundIndicator.js';
 import { SoundManager } from '../audio/SoundManager.js';
+import { spawnComboFinisher } from '../effects/SpecialEffects.js';
 
 export class FightScene extends Phaser.Scene {
   constructor() {
@@ -539,56 +540,98 @@ export class FightScene extends Phaser.Scene {
       const attackData = attacker.getAttackData();
       const knockDir = attacker.facingRight ? 1 : -1;
       const wasBlocking = defender.state === 'BLOCK';
+      const isComboFinisher = attacker.state === 'COMBO_FINISHER';
+      const isComboHit = attacker.comboChain.length > 0;
 
-      defender.takeDamage(attackData.damage, knockDir * attackData.knockback);
-
-      // Block advantage — punish the attacker for hitting into a block
-      if (wasBlocking) {
-        attacker.onAttackBlocked(knockDir);
-        SoundManager.block();
-      } else {
-        SoundManager.hit();
-
-        // Show combo counter for multi-hit chains
-        if (attacker.comboChain.length > 0) {
-          this.showComboText(attacker, attacker.comboChain.length);
-        }
-      }
-
-      // Visual feedback - screen shake
-      this.cameras.main.shake(100, 0.005 * attackData.damage);
+      // Pass attack flags (e.g. blockPiercing) to takeDamage
+      defender.takeDamage(attackData.damage, knockDir * attackData.knockback, {
+        blockPiercing: attackData.blockPiercing || false,
+      });
 
       // Hit spark at the intersection of hitbox and hurtbox (on the defender)
       const overlapX = Math.max(hitbox.x, hurtbox.x);
       const overlapX2 = Math.min(hitbox.x + hitbox.width, hurtbox.x + hurtbox.width);
       const overlapY = Math.max(hitbox.y, hurtbox.y);
       const overlapY2 = Math.min(hitbox.y + hitbox.height, hurtbox.y + hurtbox.height);
-      this.createHitSpark(
-        (overlapX + overlapX2) / 2,
-        (overlapY + overlapY2) / 2,
-        wasBlocking
-      );
+      const hitX = (overlapX + overlapX2) / 2;
+      const hitY = (overlapY + overlapY2) / 2;
+
+      // Block advantage — punish the attacker for hitting into a block
+      if (wasBlocking) {
+        // Don't punish attacker for combo finisher block pierce
+        if (!attackData.blockPiercing) {
+          attacker.onAttackBlocked(knockDir);
+        }
+        SoundManager.block();
+      } else {
+        SoundManager.hit();
+
+        // Hitstop on combo hits
+        if (isComboFinisher) {
+          // COMBO_FINISHER non-blocked: 120ms hitstop, bigger shake, finisher VFX
+          attacker.applyHitstop(120);
+          defender.applyHitstop(120);
+          this.cameras.main.shake(200, 0.02);
+          spawnComboFinisher(this, hitX, hitY, knockDir, attacker.data.color, attacker.comboFinisherAnim);
+        } else if (isComboHit) {
+          // Regular combo hit: 60ms hitstop
+          attacker.applyHitstop(60);
+          defender.applyHitstop(60);
+        }
+
+        // Show combo counter for multi-hit chains
+        if (isComboHit || isComboFinisher) {
+          this.showComboText(attacker, Math.max(attacker.comboChain.length, 1));
+        }
+      }
+
+      // Visual feedback - screen shake (unless finisher already shook)
+      if (!isComboFinisher || wasBlocking) {
+        this.cameras.main.shake(100, 0.005 * attackData.damage);
+      }
+
+      this.createHitSpark(hitX, hitY, wasBlocking);
     }
   }
 
   showComboText(fighter, hitCount) {
-    const isFinisher = fighter.comboFinisher;
-    const color = isFinisher ? '#ff3333' : '#ffcc00';
-    const fontSize = isFinisher ? '32px' : '24px';
-    const label = `${hitCount} HIT${isFinisher ? '!' : ''}`;
+    const isFinisher = fighter.comboFinisher || fighter.state === 'COMBO_FINISHER';
+    const fighterColor = `#${fighter.data.color.toString(16).padStart(6, '0')}`;
+    const textY = fighter.y - GAME_CONFIG.BODY_HEIGHT;
 
-    const text = this.add.text(fighter.x, fighter.y - GAME_CONFIG.BODY_HEIGHT, label, {
-      fontSize, fontFamily: 'monospace', color, fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(100);
+    if (isFinisher) {
+      // Finisher: "COMBO!" in 44px with fighter's color + shadow glow
+      const shadow = this.add.text(fighter.x + 2, textY + 2, 'COMBO!', {
+        fontSize: '44px', fontFamily: 'monospace', color: '#000000', fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(99).setAlpha(0.6);
 
-    this.tweens.add({
-      targets: text,
-      y: text.y - 40,
-      alpha: 0,
-      duration: 600,
-      ease: 'Power2',
-      onComplete: () => text.destroy()
-    });
+      const text = this.add.text(fighter.x, textY, 'COMBO!', {
+        fontSize: '44px', fontFamily: 'monospace', color: fighterColor, fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(100);
+
+      this.tweens.add({
+        targets: [text, shadow],
+        y: '-=50',
+        alpha: 0,
+        duration: 800,
+        ease: 'Power2',
+        onComplete: () => { text.destroy(); shadow.destroy(); }
+      });
+    } else {
+      // Non-finisher combo hits: yellow "X HIT"
+      const text = this.add.text(fighter.x, textY, `${hitCount} HIT`, {
+        fontSize: '24px', fontFamily: 'monospace', color: '#ffcc00', fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(100);
+
+      this.tweens.add({
+        targets: text,
+        y: text.y - 40,
+        alpha: 0,
+        duration: 600,
+        ease: 'Power2',
+        onComplete: () => text.destroy()
+      });
+    }
   }
 
   createHitSpark(x, y, isBlocked) {

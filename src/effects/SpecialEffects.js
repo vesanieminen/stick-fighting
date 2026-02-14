@@ -324,6 +324,90 @@ export function spawnTeleportFlash(scene, x, y, color = 0xbb44ff) {
   scene.tweens.add({ targets: g, alpha: 0, duration: 250, onComplete: () => g.destroy() });
 }
 
+export function spawnComboFinisher(scene, x, y, dir, color, animType) {
+  // White screen flash overlay (fades in 100ms)
+  const flash = scene.add.graphics().setDepth(100);
+  flash.fillStyle(0xffffff, 0.4);
+  flash.fillRect(0, 0, 1280, 720);
+  scene.tweens.add({ targets: flash, alpha: 0, duration: 100, onComplete: () => flash.destroy() });
+
+  // Shockwave ring (radius 90) in fighter's color
+  const ring = scene.add.graphics().setDepth(15);
+  scene.tweens.addCounter({
+    from: 8, to: 90, duration: 350,
+    onUpdate: (tween) => {
+      ring.clear();
+      const r = tween.getValue();
+      const t = (r - 8) / (90 - 8);
+      ring.lineStyle(4, color, (1 - t) * 0.9);
+      ring.strokeCircle(x, y, r);
+      ring.lineStyle(2, 0xffffff, (1 - t) * 0.5);
+      ring.strokeCircle(x, y, r * 0.6);
+    },
+    onComplete: () => ring.destroy()
+  });
+
+  // 8 radial speed lines from impact point
+  const lines = scene.add.graphics().setDepth(12);
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const innerR = 15;
+    const outerR = 40 + Math.random() * 20;
+    lines.lineStyle(2, 0xffffff, 0.8);
+    lines.lineBetween(
+      x + Math.cos(angle) * innerR, y + Math.sin(angle) * innerR,
+      x + Math.cos(angle) * outerR, y + Math.sin(angle) * outerR
+    );
+  }
+  scene.tweens.add({ targets: lines, alpha: 0, duration: 250, onComplete: () => lines.destroy() });
+
+  if (animType === 'launch') {
+    // Upward particle spray
+    const pg = scene.add.graphics().setDepth(12);
+    const particles = [];
+    for (let i = 0; i < 10; i++) {
+      particles.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y,
+        vx: (Math.random() - 0.5) * 60,
+        vy: -150 - Math.random() * 200,
+        size: 2 + Math.random() * 3,
+      });
+    }
+    scene.tweens.addCounter({
+      from: 0, to: 1, duration: 450,
+      onUpdate: (tween) => {
+        pg.clear();
+        const t = tween.getValue();
+        particles.forEach(p => {
+          p.x += p.vx * 0.016;
+          p.y += p.vy * 0.016;
+          p.vy += 180 * 0.016;
+          pg.fillStyle(color, 1 - t);
+          pg.fillCircle(p.x, p.y, p.size * (1 - t * 0.4));
+          pg.fillStyle(0xffffff, (1 - t) * 0.4);
+          pg.fillCircle(p.x, p.y, p.size * 0.3);
+        });
+      },
+      onComplete: () => pg.destroy()
+    });
+  } else {
+    // Horizontal speed lines + ground crack
+    const hlines = scene.add.graphics().setDepth(12);
+    for (let i = 0; i < 6; i++) {
+      const ly = y - 25 + i * 10;
+      const lx = x + dir * (10 + i * 8);
+      const len = 25 + Math.random() * 30;
+      hlines.lineStyle(2, color, 0.7 - i * 0.08);
+      hlines.lineBetween(lx, ly, lx + dir * len, ly);
+    }
+    scene.tweens.add({ targets: hlines, alpha: 0, duration: 200, onComplete: () => hlines.destroy() });
+
+    // Ground crack below impact
+    spawnGroundCrack(scene, x, y + 50, color);
+  }
+}
+
 export function spawnGroundCrack(scene, x, y, color = 0x888888) {
   const g = scene.add.graphics().setDepth(3);
   for (let i = 0; i < 5; i++) {
