@@ -348,19 +348,21 @@ export class CharacterSelectScene extends Phaser.Scene {
 
     this.p1Info.setText(
       `${p1f.name}\n` +
-      `${p1f.description}\n\n` +
+      `${p1f.description}\n` +
       `SPD: ${'|'.repeat(Math.round(p1f.moveSpeed / 40))}  ` +
       `HP: ${p1f.maxHealth || 100}\n` +
-      `Special: ${p1f.specialName}`
+      `Special: ${p1f.specialName}\n` +
+      this.formatCombos(p1f)
     );
     this.p1Info.setColor(`#${p1f.color.toString(16).padStart(6, '0')}`);
 
     this.p2Info.setText(
       `${p2f.name}\n` +
-      `${p2f.description}\n\n` +
+      `${p2f.description}\n` +
       `SPD: ${'|'.repeat(Math.round(p2f.moveSpeed / 40))}  ` +
       `HP: ${p2f.maxHealth || 100}\n` +
-      `Special: ${p2f.specialName}`
+      `Special: ${p2f.specialName}\n` +
+      this.formatCombos(p2f)
     );
     this.p2Info.setColor(`#${p2f.color.toString(16).padStart(6, '0')}`);
 
@@ -502,6 +504,15 @@ export class CharacterSelectScene extends Phaser.Scene {
         }
         break;
     }
+  }
+
+  formatCombos(fighter) {
+    if (!fighter.combos || !fighter.combos.chains.length) return 'No combos';
+    const lines = fighter.combos.chains.map(chain => {
+      const seq = chain.sequence.map(s => s === 'PUNCH' ? 'P' : 'K').join('-');
+      return seq;
+    });
+    return 'Combos: ' + lines.join('  ');
   }
 
   startFight() {
