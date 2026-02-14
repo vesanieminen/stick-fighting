@@ -56,6 +56,14 @@ export class Fighter {
     this.sameAttackCount = 0;
     this.timeSinceLastAttack = 0;
 
+    // Combo system
+    this.comboBuffer = null;      // Buffered next input during cancel window
+    this.comboChain = [];         // Sequence of attacks performed so far
+    this.comboTimer = 0;          // Time since last combo hit
+    this.comboDamageScale = 1.0;  // Current combo step damage multiplier
+    this.comboDurationScale = 1.0; // Current combo step duration multiplier
+    this.comboFinisher = false;   // Whether current hit is a finisher
+
     // Physics body using a zone (no texture needed)
     // Place zone so its center is at the right height (body bottom at ground)
     this.body = scene.add.zone(x, y - GAME_CONFIG.BODY_HEIGHT / 2, GAME_CONFIG.BODY_WIDTH, GAME_CONFIG.BODY_HEIGHT);
@@ -92,12 +100,41 @@ export class Fighter {
       this.sameAttackCount = 0;
     }
 
+    // Combo expiry — reset if not attacking for too long
+    if (!this.isAttacking() && this.comboChain.length > 0) {
+      this.comboTimer += delta;
+      if (this.comboTimer > 500) {
+        this.resetCombo();
+      }
+    }
+
     if (this.canAct && this.state !== STATES.KO && this.state !== STATES.VICTORY) {
       this.handleInput(input);
+    } else if (this.state !== STATES.KO && this.state !== STATES.VICTORY) {
+      // Check for combo buffering even when canAct is false
+      this.handleComboBuffer(input);
     }
 
     this.updateState(delta);
     this.draw();
+  }
+
+  handleComboBuffer(input) {
+    // Only buffer during PUNCH or KICK (not SPECIAL, not crouch attacks)
+    if (this.state !== STATES.PUNCH && this.state !== STATES.KICK) return;
+    if (!this.data.combos) return;
+
+    const duration = this.getEffectiveDuration();
+    const cancelWindowRatio = this.data.combos.cancelWindowRatio || 0.3;
+    const cancelStart = duration * (1 - cancelWindowRatio);
+
+    if (this.stateTimer >= cancelStart) {
+      if (input.punch) {
+        this.comboBuffer = 'PUNCH';
+      } else if (input.kick) {
+        this.comboBuffer = 'KICK';
+      }
+    }
   }
 
   handleInput(input) {
@@ -213,25 +250,44 @@ export class Fighter {
     }
   }
 
+  getStateDuration(state) {
+    switch (state || this.state) {
+      case STATES.PUNCH: case STATES.CROUCH_PUNCH: return GAME_CONFIG.PUNCH_DURATION;
+      case STATES.KICK: case STATES.CROUCH_KICK: return GAME_CONFIG.KICK_DURATION;
+      case STATES.SPECIAL: return this.specialDuration;
+      default: return 0;
+    }
+  }
+
+  getEffectiveDuration() {
+    const base = this.getStateDuration(this.state);
+    if (this.state === STATES.PUNCH || this.state === STATES.KICK) {
+      return base * this.comboDurationScale;
+    }
+    return base;
+  }
+
   updateState(delta) {
     switch (this.state) {
-      case STATES.PUNCH:
-        if (this.stateTimer >= GAME_CONFIG.PUNCH_DURATION) {
+      case STATES.PUNCH: {
+        const dur = this.getEffectiveDuration();
+        if (this.stateTimer >= dur) {
           this.canAct = true;
           this.hasHit = false;
-          this.attackCooldown = GAME_CONFIG.PUNCH_RECOVERY;
-          this.enterState(STATES.IDLE);
+          this.resolveComboOrIdle('PUNCH', GAME_CONFIG.PUNCH_RECOVERY);
         }
         break;
+      }
 
-      case STATES.KICK:
-        if (this.stateTimer >= GAME_CONFIG.KICK_DURATION) {
+      case STATES.KICK: {
+        const dur = this.getEffectiveDuration();
+        if (this.stateTimer >= dur) {
           this.canAct = true;
           this.hasHit = false;
-          this.attackCooldown = GAME_CONFIG.KICK_RECOVERY;
-          this.enterState(STATES.IDLE);
+          this.resolveComboOrIdle('KICK', GAME_CONFIG.KICK_RECOVERY);
         }
         break;
+      }
 
       case STATES.CROUCH_PUNCH:
         if (this.stateTimer >= GAME_CONFIG.PUNCH_DURATION) {
@@ -290,6 +346,67 @@ export class Fighter {
         }
         break;
     }
+  }
+
+  resolveComboOrIdle(currentAttack, recoveryTime) {
+    if (this.comboBuffer && this.data.combos) {
+      const candidateSequence = [...this.comboChain, currentAttack, this.comboBuffer];
+      const match = this.findComboChain(candidateSequence);
+
+      if (match) {
+        const { chain, stepIndex } = match;
+        // stepIndex is the index of the buffered input in the chain sequence
+        this.comboChain = candidateSequence;
+        this.comboTimer = 0;
+        this.comboDamageScale = chain.damageScale[stepIndex] || 1.0;
+        this.comboDurationScale = chain.durationScale[stepIndex] || 1.0;
+        this.comboFinisher = chain.finisher && stepIndex === chain.sequence.length - 1;
+
+        // Chain into next attack with no recovery
+        this.attackCooldown = 0;
+        const nextState = this.comboBuffer === 'PUNCH' ? STATES.PUNCH : STATES.KICK;
+        this.comboBuffer = null;
+        this.enterState(nextState);
+        this.canAct = false;
+        return;
+      }
+    }
+
+    // No combo match — reset and go to idle
+    this.resetCombo();
+    this.attackCooldown = recoveryTime;
+    this.enterState(STATES.IDLE);
+  }
+
+  findComboChain(candidateSequence) {
+    if (!this.data.combos) return null;
+
+    for (const chain of this.data.combos.chains) {
+      // Check if candidateSequence is a prefix of (or equals) this chain's sequence
+      if (candidateSequence.length > chain.sequence.length) continue;
+
+      let matches = true;
+      for (let i = 0; i < candidateSequence.length; i++) {
+        if (candidateSequence[i] !== chain.sequence[i]) {
+          matches = false;
+          break;
+        }
+      }
+
+      if (matches) {
+        return { chain, stepIndex: candidateSequence.length - 1 };
+      }
+    }
+    return null;
+  }
+
+  resetCombo() {
+    this.comboBuffer = null;
+    this.comboChain = [];
+    this.comboTimer = 0;
+    this.comboDamageScale = 1.0;
+    this.comboDurationScale = 1.0;
+    this.comboFinisher = false;
   }
 
   updateSpecial(delta) {
@@ -556,6 +673,7 @@ export class Fighter {
 
     if (newState === STATES.HIT) {
       this.canAct = false;
+      this.resetCombo(); // Getting hit resets combo
     }
 
     // Stop sliding when blocking or crouching
@@ -575,13 +693,13 @@ export class Fighter {
     switch (this.state) {
       case STATES.PUNCH:
       case STATES.CROUCH_PUNCH:
-        duration = GAME_CONFIG.PUNCH_DURATION;
+        duration = this.state === STATES.PUNCH ? this.getEffectiveDuration() : GAME_CONFIG.PUNCH_DURATION;
         activeStart = duration * 0.3;
         activeEnd = duration * 0.6;
         break;
       case STATES.KICK:
       case STATES.CROUCH_KICK:
-        duration = GAME_CONFIG.KICK_DURATION;
+        duration = this.state === STATES.KICK ? this.getEffectiveDuration() : GAME_CONFIG.KICK_DURATION;
         activeStart = duration * 0.25;
         activeEnd = duration * 0.6;
         break;
@@ -617,19 +735,22 @@ export class Fighter {
 
   getAttackData() {
     const stale = this.getStaleDamageMultiplier();
+    const comboScale = this.comboDamageScale;
+    const finisherKnockbackScale = this.comboFinisher ? 1.5 : 1.0;
+
     switch (this.state) {
       case STATES.PUNCH:
         return {
-          damage: Math.round(this.data.punchDamage * stale),
+          damage: Math.round(this.data.punchDamage * stale * comboScale),
           range: this.data.punchRange,
-          knockback: GAME_CONFIG.PUNCH_KNOCKBACK,
+          knockback: GAME_CONFIG.PUNCH_KNOCKBACK * finisherKnockbackScale,
           isCrouchAttack: false,
         };
       case STATES.KICK:
         return {
-          damage: Math.round(this.data.kickDamage * stale),
+          damage: Math.round(this.data.kickDamage * stale * comboScale),
           range: this.data.kickRange,
-          knockback: GAME_CONFIG.KICK_KNOCKBACK,
+          knockback: GAME_CONFIG.KICK_KNOCKBACK * finisherKnockbackScale,
           isCrouchAttack: false,
         };
       case STATES.SPECIAL:
@@ -771,6 +892,7 @@ export class Fighter {
     this.body.body.setVelocityX(-knockDir * GAME_CONFIG.BLOCK_ATTACKER_PUSHBACK);
     this.attackCooldown = GAME_CONFIG.BLOCK_ATTACKER_STUN;
     this.canAct = false;
+    this.resetCombo(); // Block resets combo
     // Brief stun then recover — only if the attack has already ended.
     // If still in an attack state, updateState will restore canAct when the attack finishes.
     this.scene.time.delayedCall(GAME_CONFIG.BLOCK_ATTACKER_STUN, () => {
@@ -801,6 +923,7 @@ export class Fighter {
     this.lastAttackType = null;
     this.sameAttackCount = 0;
     this.timeSinceLastAttack = 0;
+    this.resetCombo();
   }
 
   draw() {
@@ -817,8 +940,8 @@ export class Fighter {
       let totalDuration;
       let looping = false;
       switch (this.state) {
-        case STATES.PUNCH: case STATES.CROUCH_PUNCH: totalDuration = GAME_CONFIG.PUNCH_DURATION; break;
-        case STATES.KICK: case STATES.CROUCH_KICK: totalDuration = GAME_CONFIG.KICK_DURATION; break;
+        case STATES.PUNCH: case STATES.CROUCH_PUNCH: totalDuration = this.getEffectiveDuration(); break;
+        case STATES.KICK: case STATES.CROUCH_KICK: totalDuration = this.getEffectiveDuration(); break;
         case STATES.SPECIAL: totalDuration = this.specialDuration; break;
         case STATES.KO: totalDuration = 800; break;
         case STATES.JUMP: totalDuration = 600; break;
@@ -854,7 +977,7 @@ export class Fighter {
     const drawY = this.y + GAME_CONFIG.BODY_HEIGHT / 2 - 60;
     const showGhost = this.isAttacking();
 
-    this.renderer.draw(drawX, drawY, pose, this.facingRight, this.data.color, showGhost);
+    this.renderer.draw(drawX, drawY, pose, this.facingRight, this.data.color, showGhost, this.data.visual || null);
   }
 
   destroy() {

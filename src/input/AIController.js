@@ -29,6 +29,11 @@ export class AIController {
     // Decision timer — make a new decision every 400-800ms
     this.decisionTimer = 0;
     this.decisionInterval = this.nextInterval();
+
+    // Combo follow-up system
+    this.comboFollowUp = null;       // 'punch' or 'kick'
+    this.comboFollowUpTimer = 0;     // ms elapsed since queued
+    this.comboFollowUpDelay = 0;     // target delay before firing
   }
 
   nextInterval() {
@@ -43,6 +48,21 @@ export class AIController {
       this.decisionTimer = 0;
       this.decisionInterval = this.nextInterval();
       this.decide();
+    }
+
+    // Process combo follow-up
+    if (this.comboFollowUp && this.fighter.isAttacking()) {
+      this.comboFollowUpTimer += delta;
+      if (this.comboFollowUpTimer >= this.comboFollowUpDelay) {
+        // Set the buffered input — edge detection will fire it
+        this.currentActions[this.comboFollowUp] = true;
+        this.comboFollowUp = null;
+        this.comboFollowUpTimer = 0;
+      }
+    } else if (this.comboFollowUp && !this.fighter.isAttacking()) {
+      // Fighter finished attacking before we could fire — cancel
+      this.comboFollowUp = null;
+      this.comboFollowUpTimer = 0;
     }
 
     // Edge detection for one-shot actions (same as InputManager)
@@ -144,8 +164,10 @@ export class AIController {
           a.special = true;
         } else if (roll < 0.55) {
           a.punch = true;
+          this.tryQueueComboFollowUp('punch');
         } else {
           a.kick = true;
+          this.tryQueueComboFollowUp('kick');
         }
       }
 
@@ -156,5 +178,17 @@ export class AIController {
     }
 
     this.currentActions = a;
+  }
+
+  tryQueueComboFollowUp(initialAttack) {
+    if (!this.fighter.data.combos) return;
+    if (this.comboFollowUp) return; // already queued
+
+    // 40% chance to queue a follow-up
+    if (Math.random() < 0.4) {
+      this.comboFollowUp = Math.random() < 0.5 ? 'punch' : 'kick';
+      this.comboFollowUpTimer = 0;
+      this.comboFollowUpDelay = 200 + Math.random() * 100; // 200-300ms
+    }
   }
 }

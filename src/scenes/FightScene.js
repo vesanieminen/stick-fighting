@@ -548,6 +548,11 @@ export class FightScene extends Phaser.Scene {
         SoundManager.block();
       } else {
         SoundManager.hit();
+
+        // Show combo counter for multi-hit chains
+        if (attacker.comboChain.length > 0) {
+          this.showComboText(attacker, attacker.comboChain.length);
+        }
       }
 
       // Visual feedback - screen shake
@@ -564,6 +569,26 @@ export class FightScene extends Phaser.Scene {
         wasBlocking
       );
     }
+  }
+
+  showComboText(fighter, hitCount) {
+    const isFinisher = fighter.comboFinisher;
+    const color = isFinisher ? '#ff3333' : '#ffcc00';
+    const fontSize = isFinisher ? '32px' : '24px';
+    const label = `${hitCount} HIT${isFinisher ? '!' : ''}`;
+
+    const text = this.add.text(fighter.x, fighter.y - GAME_CONFIG.BODY_HEIGHT, label, {
+      fontSize, fontFamily: 'monospace', color, fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(100);
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - 40,
+      alpha: 0,
+      duration: 600,
+      ease: 'Power2',
+      onComplete: () => text.destroy()
+    });
   }
 
   createHitSpark(x, y, isBlocked) {

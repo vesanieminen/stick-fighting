@@ -70,7 +70,7 @@ export class CharacterSelectScene extends Phaser.Scene {
           y: specialPose[joint].y * scale,
         };
       }
-      renderer.draw(cx, cy + 10, scaledPose, true, fighter.color);
+      renderer.draw(cx, cy + 10, scaledPose, true, fighter.color, false, fighter.visual || null);
 
       // Special effect decoration behind the figure
       const fx = this.add.graphics();

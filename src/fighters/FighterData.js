@@ -18,6 +18,22 @@ export const FIGHTERS = [
     specialType: 'lunge',
     specialName: 'Dash Strike',
     specialDuration: 500,
+    visual: {
+      headRadius: 1.0,
+      lineWidth: 0.85,
+      limbScale: 1.05,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'headband', joint: 'head', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','PUNCH','KICK'], damageScale: [1,1.1,1.3], durationScale: [1,0.7,0.85], finisher: true },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+        { sequence: ['KICK','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.75,0.8], finisher: true },
+      ],
+      cancelWindowRatio: 0.35,
+    },
   },
   {
     id: 'titan',
@@ -35,6 +51,21 @@ export const FIGHTERS = [
     specialType: 'groundPound',
     specialName: 'Ground Pound',
     specialDuration: 900,
+    visual: {
+      headRadius: 1.2,
+      lineWidth: 1.4,
+      limbScale: 0.92,
+      shoulderWidth: 1.3,
+      headShape: 'circle',
+      accessories: [{ type: 'shoulderPads', joint: 'shoulderL', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.4], durationScale: [1,0.9], finisher: true },
+        { sequence: ['KICK','KICK'], damageScale: [1,1.5], durationScale: [1,0.9], finisher: true },
+      ],
+      cancelWindowRatio: 0.25,
+    },
   },
   {
     id: 'shadow',
@@ -53,6 +84,22 @@ export const FIGHTERS = [
     specialName: 'Shadow Step',
     specialDuration: 550,
     maxHealth: 80,
+    visual: {
+      headRadius: 0.85,
+      lineWidth: 0.75,
+      limbScale: 1.08,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'scarf', joint: 'neck', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.65,0.6], finisher: true },
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.2], durationScale: [1,0.75], finisher: true },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.1], durationScale: [1,0.7], finisher: true },
+      ],
+      cancelWindowRatio: 0.35,
+    },
   },
   {
     id: 'blaze',
@@ -70,6 +117,21 @@ export const FIGHTERS = [
     specialType: 'uppercut',
     specialName: 'Fire Uppercut',
     specialDuration: 650,
+    visual: {
+      headRadius: 1.0,
+      lineWidth: 1.0,
+      limbScale: 1.0,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'flameHair', joint: 'head', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','PUNCH','KICK'], damageScale: [1,1.1,1.4], durationScale: [1,0.75,0.85], finisher: true },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.3], durationScale: [1,0.8], finisher: true },
+      ],
+      cancelWindowRatio: 0.3,
+    },
   },
   {
     id: 'frost',
@@ -87,6 +149,21 @@ export const FIGHTERS = [
     specialType: 'slide',
     specialName: 'Ice Slide',
     specialDuration: 550,
+    visual: {
+      headRadius: 1.0,
+      lineWidth: 1.0,
+      limbScale: 1.0,
+      shoulderWidth: 1.0,
+      headShape: 'angular',
+      accessories: [{ type: 'iceShard', joint: 'shoulderL', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.3], durationScale: [1,0.85], finisher: true },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+      ],
+      cancelWindowRatio: 0.28,
+    },
   },
   {
     id: 'thunder',
@@ -104,6 +181,21 @@ export const FIGHTERS = [
     specialType: 'lightningDrop',
     specialName: 'Lightning Drop',
     specialDuration: 800,
+    visual: {
+      headRadius: 1.0,
+      lineWidth: 1.1,
+      limbScale: 1.0,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'boltMark', joint: 'neck', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','KICK','PUNCH'], damageScale: [1,1.1,1.3], durationScale: [1,0.8,0.75], finisher: true },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+      ],
+      cancelWindowRatio: 0.3,
+    },
   },
   {
     id: 'viper',
@@ -122,6 +214,22 @@ export const FIGHTERS = [
     specialName: 'Viper Flurry',
     specialHits: 4,
     specialDuration: 700,
+    visual: {
+      headRadius: 0.9,
+      lineWidth: 0.8,
+      limbScale: 1.1,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'tail', joint: 'hip', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','PUNCH','PUNCH','KICK'], damageScale: [1,1.0,1.1,1.4], durationScale: [1,0.6,0.55,0.7], finisher: true },
+        { sequence: ['PUNCH','KICK','PUNCH'], damageScale: [1,1.1,1.3], durationScale: [1,0.7,0.65], finisher: true },
+        { sequence: ['KICK','PUNCH','PUNCH'], damageScale: [1,1.0,1.2], durationScale: [1,0.65,0.6], finisher: true },
+      ],
+      cancelWindowRatio: 0.38,
+    },
   },
   {
     id: 'golem',
@@ -140,6 +248,21 @@ export const FIGHTERS = [
     specialName: 'Armor Smash',
     specialDuration: 800,
     maxHealth: 120,
+    visual: {
+      headRadius: 1.35,
+      lineWidth: 1.6,
+      limbScale: 0.88,
+      shoulderWidth: 1.4,
+      headShape: 'flat',
+      accessories: [{ type: 'armGuards', joint: 'elbowL', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','PUNCH'], damageScale: [1,1.5], durationScale: [1,0.9], finisher: true },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.4], durationScale: [1,0.85], finisher: true },
+      ],
+      cancelWindowRatio: 0.22,
+    },
   },
   {
     id: 'phantom',
@@ -157,6 +280,21 @@ export const FIGHTERS = [
     specialType: 'whirlwind',
     specialName: 'Whirlwind',
     specialDuration: 650,
+    visual: {
+      headRadius: 0.9,
+      lineWidth: 0.7,
+      limbScale: 1.06,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'wisps', joint: 'hip', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','KICK','KICK'], damageScale: [1,1.1,1.3], durationScale: [1,0.8,0.75], finisher: true },
+        { sequence: ['KICK','PUNCH'], damageScale: [1,1.2], durationScale: [1,0.8], finisher: true },
+      ],
+      cancelWindowRatio: 0.3,
+    },
   },
   {
     id: 'nova',
@@ -175,6 +313,21 @@ export const FIGHTERS = [
     specialName: 'Nova Burst',
     specialDuration: 700,
     maxHealth: 70,
+    visual: {
+      headRadius: 1.0,
+      lineWidth: 1.0,
+      limbScale: 0.95,
+      shoulderWidth: 1.0,
+      headShape: 'circle',
+      accessories: [{ type: 'halo', joint: 'head', offsetX: 0, offsetY: 0 }],
+    },
+    combos: {
+      chains: [
+        { sequence: ['PUNCH','KICK'], damageScale: [1,1.5], durationScale: [1,0.85], finisher: true },
+        { sequence: ['KICK','KICK'], damageScale: [1,1.4], durationScale: [1,0.9], finisher: true },
+      ],
+      cancelWindowRatio: 0.28,
+    },
   },
 ];
 
