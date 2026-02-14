@@ -27,6 +27,14 @@ export class TitleScene extends Phaser.Scene {
       color: '#888888'
     }).setOrigin(0.5);
 
+    // Version and build timestamp
+    const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : new Date().toISOString();
+    this.add.text(640, 710, `v1.0.0 | Built ${buildTime.replace('T', ' ').slice(0, 19)} UTC`, {
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      color: '#444444'
+    }).setOrigin(0.5);
+
     // P1 stick figure (always white)
     const g1 = this.add.graphics();
     const renderer1 = new StickFigureRenderer(g1);

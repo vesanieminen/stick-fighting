@@ -104,11 +104,8 @@ export class Fighter {
     // Can't act during attack recovery or hitstun
     if (!this.canAct) return;
 
-    // Derive blocking direction: pressing AWAY from the opponent
-    const pressingBack = (this.facingRight && input.left) || (!this.facingRight && input.right);
-
-    // Release block when no longer pressing back
-    if (this.state === STATES.BLOCK && !pressingBack) {
+    // Release block when button released
+    if (this.state === STATES.BLOCK && !input.block) {
       this.enterState(STATES.IDLE);
     }
 
@@ -158,8 +155,8 @@ export class Fighter {
       }
     }
 
-    // Block (back direction, grounded, actionable)
-    if (pressingBack && this.isGrounded && inActionableState) {
+    // Block (dedicated button, grounded, actionable)
+    if (input.block && this.isGrounded && inActionableState) {
       if (this.state !== STATES.BLOCK) {
         this.enterState(STATES.BLOCK);
       }

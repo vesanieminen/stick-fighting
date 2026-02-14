@@ -9,6 +9,7 @@ const KEYBOARD_BINDINGS = {
     kick:    'K',
     special: 'L',
     down:    'S',
+    block:   'F',
   },
   1: {  // Player 2
     left:    'LEFT',
@@ -18,6 +19,7 @@ const KEYBOARD_BINDINGS = {
     kick:    'PERIOD',
     special: 'MINUS',
     down:    'DOWN',
+    block:   'SLASH',
   }
 };
 
@@ -75,6 +77,7 @@ export class InputManager {
       kick:    kb.kick    || gp.kick,
       special: kb.special || gp.special,
       down:    kb.down    || gp.down,
+      block:   kb.block   || gp.block,
     };
 
     // Edge detection for one-shot actions
@@ -86,6 +89,7 @@ export class InputManager {
       kick:    raw.kick    && !this.prevState.kick,
       special: raw.special && !this.prevState.special,
       down:    raw.down,
+      block:   raw.block,
     };
 
     this.prevState = {
@@ -107,12 +111,13 @@ export class InputManager {
       kick:    this.keys.kick.isDown,
       special: this.keys.special.isDown,
       down:    this.keys.down.isDown,
+      block:   this.keys.block.isDown,
     };
   }
 
   readGamepad() {
     const pad = this.gamepad;
-    const none = { left: false, right: false, jump: false, punch: false, kick: false, special: false, down: false };
+    const none = { left: false, right: false, jump: false, punch: false, kick: false, special: false, down: false, block: false };
     if (!pad || !pad.connected) return none;
 
     const DEADZONE = 0.3;
@@ -131,6 +136,7 @@ export class InputManager {
       kick:    btn(3),              // North (Triangle on PS5, Y on Xbox)
       special: btn(1),              // East (Circle on PS5, B on Xbox)
       down:    pad.down || stickY > DEADZONE,  // D-pad down or stick down
+      block:   btn(4) || btn(5),    // L1/R1
     };
   }
 }
