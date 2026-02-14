@@ -736,6 +736,9 @@ export class FightScene extends Phaser.Scene {
     this.continueText = this.add.text(640, 400, 'Press any button', {
       fontSize: '22px', fontFamily: 'monospace', color: '#888888'
     }).setOrigin(0.5).setDepth(200).setAlpha(0);
+
+    // Require all inputs to be released before accepting continue input
+    this.continueInputReleased = false;
   }
 
   advanceFromKO() {
@@ -761,14 +764,13 @@ export class FightScene extends Phaser.Scene {
     }
   }
 
-  checkContinueInput() {
-    // Keyboard: any action key
+  anyInputHeld() {
+    // Keyboard
     const keys = this.input.keyboard.keys;
     for (const key of keys) {
       if (key && key.isDown) return true;
     }
-
-    // Gamepads: any button
+    // Gamepads
     const pads = this._getPads();
     for (const pad of pads) {
       if (!pad || !pad.connected) continue;
@@ -776,8 +778,19 @@ export class FightScene extends Phaser.Scene {
         if (btn && btn.pressed) return true;
       }
     }
-
     return false;
+  }
+
+  checkContinueInput() {
+    if (!this.continueInputReleased) {
+      // Wait for all buttons/keys from the fight to be released first
+      if (!this.anyInputHeld()) {
+        this.continueInputReleased = true;
+      }
+      return false;
+    }
+    // Now accept a fresh press
+    return this.anyInputHeld();
   }
 
   cleanUp() {
