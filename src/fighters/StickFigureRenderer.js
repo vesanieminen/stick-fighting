@@ -302,6 +302,20 @@ export class StickFigureRenderer {
     }
   }
 
+  drawWorldSpace(positions, color, visual) {
+    const g = this.graphics;
+    const v = visual || DEFAULT_VISUAL;
+
+    g.clear();
+
+    // Infer direction from shoulder positions (for accessories)
+    const dir = positions.shoulderR.x >= positions.shoulderL.x ? 1 : -1;
+
+    // Draw figure directly from world-space positions (no transformPose)
+    this.drawFigure(g, positions, color, 1.0, v);
+    this.drawAccessories(g, positions, color, 1.0, v, dir);
+  }
+
   drawLimb(g, from, to, color, lineWidth, alpha) {
     g.lineStyle(lineWidth, color, alpha);
     g.lineBetween(from.x, from.y, to.x, to.y);

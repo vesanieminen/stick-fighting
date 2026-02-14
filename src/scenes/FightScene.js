@@ -435,7 +435,36 @@ export class FightScene extends Phaser.Scene {
     this.drawSpBar(this.p1SpBar, this.p1SpBarX, this.p1SpBarY, this.fighter1.specialCooldown, this.p1Data.color);
     this.drawSpBar(this.p2SpBar, this.p2SpBarX, this.p2SpBarY, this.fighter2.specialCooldown, this.p2Data.color);
 
-    if (!this.roundActive) return;
+    // Keep updating fighters after round ends so ragdoll/victory anims play out
+    if (!this.roundActive) {
+      const empty = {};
+      this.fighter1.update(delta, empty);
+      this.fighter2.update(delta, empty);
+
+      // "Press any button to continue" after a short delay
+      if (this.roundEndTimer !== undefined) {
+        this.roundEndTimer += delta;
+        if (!this.roundEndReady && this.roundEndTimer > 1500) {
+          this.roundEndReady = true;
+          if (this.continueText) {
+            this.continueText.setAlpha(1);
+            this.tweens.add({
+              targets: this.continueText,
+              alpha: { from: 1, to: 0.3 },
+              duration: 600,
+              yoyo: true,
+              repeat: -1,
+            });
+          }
+        }
+        if (this.roundEndReady && this.checkContinueInput()) {
+          this.roundEndTimer = undefined;
+          this.advanceFromKO();
+        }
+      }
+
+      return;
+    }
 
     // Read input
     const p1Actions = this.p1Input.getActions();
@@ -495,6 +524,7 @@ export class FightScene extends Phaser.Scene {
     SoundManager.hit();
 
     if (fighter.health <= 0) {
+      fighter.createRagdoll(0, -300);
       fighter.enterState('KO');
       fighter.canAct = false;
     }
@@ -681,6 +711,9 @@ export class FightScene extends Phaser.Scene {
 
   endRound(winnerIndex) {
     this.roundActive = false;
+    this.roundWinner = winnerIndex;
+    this.roundEndTimer = 0;
+    this.roundEndReady = false;
 
     if (winnerIndex === 0) this.p1Wins++;
     else this.p2Wins++;
@@ -692,32 +725,59 @@ export class FightScene extends Phaser.Scene {
     loser.enterState('KO');
 
     // KO text
-    const koText = this.add.text(640, 300, 'K.O.!', {
+    this.koText = this.add.text(640, 300, 'K.O.!', {
       fontSize: '80px', fontFamily: 'monospace', color: '#ff3333', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(200);
 
     SoundManager.ko();
     this.cameras.main.shake(300, 0.01);
 
-    this.time.delayedCall(GAME_CONFIG.ROUND_END_DELAY, () => {
-      koText.destroy();
+    // "Press any button" prompt (hidden until ready)
+    this.continueText = this.add.text(640, 400, 'Press any button', {
+      fontSize: '22px', fontFamily: 'monospace', color: '#888888'
+    }).setOrigin(0.5).setDepth(200).setAlpha(0);
+  }
 
-      // Check if match is over
-      if (this.p1Wins >= GAME_CONFIG.ROUNDS_TO_WIN || this.p2Wins >= GAME_CONFIG.ROUNDS_TO_WIN) {
-        this.registry.set('p1Wins', this.p1Wins);
-        this.registry.set('p2Wins', this.p2Wins);
-        this.registry.set('matchWinner', winnerIndex);
-        this.cleanUp();
-        this.scene.start('ResultScene');
-      } else {
-        // Next round
-        this.registry.set('p1Wins', this.p1Wins);
-        this.registry.set('p2Wins', this.p2Wins);
-        this.registry.set('currentRound', this.currentRound + 1);
-        this.cleanUp();
-        this.scene.restart();
+  advanceFromKO() {
+    if (this.koText) { this.koText.destroy(); this.koText = null; }
+    if (this.continueText) { this.continueText.destroy(); this.continueText = null; }
+
+    const winnerIndex = this.roundWinner;
+
+    // Check if match is over
+    if (this.p1Wins >= GAME_CONFIG.ROUNDS_TO_WIN || this.p2Wins >= GAME_CONFIG.ROUNDS_TO_WIN) {
+      this.registry.set('p1Wins', this.p1Wins);
+      this.registry.set('p2Wins', this.p2Wins);
+      this.registry.set('matchWinner', winnerIndex);
+      this.cleanUp();
+      this.scene.start('ResultScene');
+    } else {
+      // Next round
+      this.registry.set('p1Wins', this.p1Wins);
+      this.registry.set('p2Wins', this.p2Wins);
+      this.registry.set('currentRound', this.currentRound + 1);
+      this.cleanUp();
+      this.scene.restart();
+    }
+  }
+
+  checkContinueInput() {
+    // Keyboard: any action key
+    const keys = this.input.keyboard.keys;
+    for (const key of keys) {
+      if (key && key.isDown) return true;
+    }
+
+    // Gamepads: any button
+    const pads = this._getPads();
+    for (const pad of pads) {
+      if (!pad || !pad.connected) continue;
+      for (const btn of pad.buttons) {
+        if (btn && btn.pressed) return true;
       }
-    });
+    }
+
+    return false;
   }
 
   cleanUp() {

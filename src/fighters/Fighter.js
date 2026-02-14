@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_CONFIG } from '../config.js';
 import { POSES, lerpPose, mirrorPose } from './FighterAnimations.js';
 import { StickFigureRenderer } from './StickFigureRenderer.js';
+import { RagdollPhysics } from './RagdollPhysics.js';
 import { SoundManager } from '../audio/SoundManager.js';
 import {
   spawnSpeedLines, spawnDustPuff, spawnShockwave, spawnFireParticles,
@@ -71,6 +72,9 @@ export class Fighter {
 
     // Hitstop
     this.hitstopTimer = 0;
+
+    // Ragdoll (set on KO)
+    this.ragdoll = null;
 
     // Physics body using a zone (no texture needed)
     // Place zone so its center is at the right height (body bottom at ground)
@@ -385,12 +389,10 @@ export class Fighter {
         break;
 
       case STATES.KO:
-        // KO falling animation
-        if (this.stateTimer < 500) {
-          const dir = this.facingRight ? -1 : 1;
-          this.body.body.setVelocityX(dir * 100);
-        } else {
-          this.body.body.setVelocityX(0);
+        // Ragdoll physics replaces the old canned slide
+        this.body.body.setVelocity(0, 0);
+        if (this.ragdoll) {
+          this.ragdoll.update(delta / 1000);
         }
         break;
     }
@@ -971,9 +973,42 @@ export class Fighter {
     this.health = Math.max(0, this.health);
 
     if (this.health <= 0) {
+      this.createRagdoll(knockbackX, -150);
       this.enterState(STATES.KO);
       this.canAct = false;
     }
+  }
+
+  createRagdoll(knockbackVelX, knockbackVelY) {
+    // Snapshot current pose to world-space positions (mirrors transformPose logic)
+    const poseKey = this.state === STATES.COMBO_FINISHER
+      ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
+      : this.state;
+    const poses = POSES[poseKey];
+    if (!poses) return;
+
+    const pose = poses[0]; // Use first frame of current state
+    const drawX = this.x;
+    const drawY = this.y + GAME_CONFIG.BODY_HEIGHT / 2 - 60;
+    const dir = this.facingRight ? 1 : -1;
+    const v = this.data.visual || {};
+    const limbScale = v.limbScale || 1.0;
+    const shoulderWidth = v.shoulderWidth || 1.0;
+
+    const worldPose = {};
+    for (const joint in pose) {
+      let sx = pose[joint].x * limbScale;
+      const sy = pose[joint].y * limbScale;
+      if (joint === 'shoulderL' || joint === 'shoulderR') {
+        sx = pose[joint].x * shoulderWidth * limbScale;
+      }
+      worldPose[joint] = {
+        x: drawX + sx * dir,
+        y: drawY + sy,
+      };
+    }
+
+    this.ragdoll = new RagdollPhysics(worldPose, knockbackVelX, knockbackVelY, v);
   }
 
   onAttackBlocked(knockDir) {
@@ -1014,10 +1049,18 @@ export class Fighter {
     this.sameAttackCount = 0;
     this.timeSinceLastAttack = 0;
     this.hitstopTimer = 0;
+    this.ragdoll = null;
     this.resetCombo();
   }
 
   draw() {
+    // Ragdoll rendering during KO — skip normal pose pipeline
+    if (this.state === STATES.KO && this.ragdoll) {
+      const positions = this.ragdoll.getWorldPositions();
+      this.renderer.drawWorldSpace(positions, this.data.color, this.data.visual || null);
+      return;
+    }
+
     const poseKey = this.state === STATES.COMBO_FINISHER
       ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
       : this.state;
@@ -1082,6 +1125,7 @@ export class Fighter {
   }
 
   destroy() {
+    this.ragdoll = null;
     this.graphics.destroy();
     this.body.destroy();
   }
