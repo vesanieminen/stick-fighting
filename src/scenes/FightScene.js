@@ -547,10 +547,14 @@ export class FightScene extends Phaser.Scene {
       // Visual feedback - screen shake
       this.cameras.main.shake(100, 0.005 * attackData.damage);
 
-      // Hit spark effect
+      // Hit spark at the intersection of hitbox and hurtbox (on the defender)
+      const overlapX = Math.max(hitbox.x, hurtbox.x);
+      const overlapX2 = Math.min(hitbox.x + hitbox.width, hurtbox.x + hurtbox.width);
+      const overlapY = Math.max(hitbox.y, hurtbox.y);
+      const overlapY2 = Math.min(hitbox.y + hitbox.height, hurtbox.y + hurtbox.height);
       this.createHitSpark(
-        (hitbox.x + hitbox.width / 2),
-        (hitbox.y + hitbox.height / 2),
+        (overlapX + overlapX2) / 2,
+        (overlapY + overlapY2) / 2,
         wasBlocking
       );
     }

@@ -100,6 +100,11 @@ export class Fighter {
     // Can't act during attack recovery or hitstun
     if (!this.canAct) return;
 
+    // Release block — always checked first, regardless of grounded state
+    if (this.state === STATES.BLOCK && !input.block) {
+      this.enterState(STATES.IDLE);
+    }
+
     const inActionableState = [STATES.IDLE, STATES.WALK_FORWARD, STATES.WALK_BACKWARD, STATES.BLOCK].includes(this.state);
     const inAir = !this.isGrounded;
 
@@ -120,19 +125,13 @@ export class Fighter {
       }
     }
 
-    // Block
+    // Block (requires grounded to enter, but release handled above)
     if (input.block && this.isGrounded && inActionableState) {
       if (this.state !== STATES.BLOCK) {
         this.enterState(STATES.BLOCK);
       }
-      // Keep velocity zeroed every frame so pushback doesn't cause sliding
       this.body.body.setVelocityX(0);
       return;
-    }
-
-    // Release block
-    if (this.state === STATES.BLOCK && !input.block) {
-      this.enterState(STATES.IDLE);
     }
 
     // Jump
@@ -142,8 +141,8 @@ export class Fighter {
       return;
     }
 
-    // Movement (only on ground in actionable states)
-    if (this.state !== STATES.BLOCK && this.state !== STATES.JUMP) {
+    // Movement (only on ground in actionable states, never during attacks)
+    if (this.state !== STATES.BLOCK && this.state !== STATES.JUMP && !this.isAttacking()) {
       if (input.left) {
         this.body.body.setVelocityX(-this.data.moveSpeed);
         if (this.isGrounded) {
@@ -590,36 +589,39 @@ export class Fighter {
     const bx = this.x;
     const by = this.y;
 
+    const bodyH = GAME_CONFIG.BODY_HEIGHT;
+
     // Special moves with area-of-effect hitboxes (hit both sides)
     if (this.state === STATES.SPECIAL) {
       switch (this.data.specialType) {
         case 'explosion':
-          // Large circle-like area centered on fighter
+          // Large area centered on fighter
           return new Phaser.Geom.Rectangle(
-            bx - attack.range / 2, by - attack.range / 3,
-            attack.range, attack.range * 0.66
+            bx - attack.range / 2, by - bodyH / 2,
+            attack.range, bodyH
           );
         case 'groundPound':
           // Wide area on ground around fighter
           return new Phaser.Geom.Rectangle(
-            bx - attack.range / 2, by - 20,
-            attack.range, 60
+            bx - attack.range / 2, by - bodyH / 2,
+            attack.range, bodyH
           );
         case 'whirlwind':
           // Wide spin area around fighter
           return new Phaser.Geom.Rectangle(
-            bx - attack.range / 2, by - 30,
-            attack.range, 60
+            bx - attack.range / 2, by - bodyH / 2,
+            attack.range, bodyH
           );
       }
     }
 
     // Standard forward-facing hitbox (punch, kick, and forward specials)
+    // Full body height so attacks connect across platform height differences
     const hbX = dir > 0
       ? bx + GAME_CONFIG.BODY_WIDTH / 2
       : bx - GAME_CONFIG.BODY_WIDTH / 2 - attack.range;
 
-    return new Phaser.Geom.Rectangle(hbX, by - 25, attack.range, 50);
+    return new Phaser.Geom.Rectangle(hbX, by - bodyH / 2, attack.range, bodyH);
   }
 
   getHurtboxRect() {
@@ -664,9 +666,10 @@ export class Fighter {
     this.body.body.setVelocityX(-knockDir * GAME_CONFIG.BLOCK_ATTACKER_PUSHBACK);
     this.attackCooldown = GAME_CONFIG.BLOCK_ATTACKER_STUN;
     this.canAct = false;
-    // Brief stun then recover
+    // Brief stun then recover — only if the attack has already ended.
+    // If still in an attack state, updateState will restore canAct when the attack finishes.
     this.scene.time.delayedCall(GAME_CONFIG.BLOCK_ATTACKER_STUN, () => {
-      if (this.state !== STATES.KO) {
+      if (this.state !== STATES.KO && !this.isAttacking()) {
         this.canAct = true;
       }
     });
