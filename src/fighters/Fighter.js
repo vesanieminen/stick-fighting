@@ -1152,7 +1152,7 @@ export class Fighter {
     this.health = Math.max(0, this.health);
 
     if (this.health <= 0) {
-      this.createRagdoll(knockbackX, -150, this._ragdollGroundY);
+      this.createRagdoll(knockbackX * 2.5, -400, this._ragdollGroundY);
       this.enterState(STATES.KO);
       this.canAct = false;
     }

@@ -973,6 +973,7 @@ export class FightScene extends Phaser.Scene {
     // Set fighter states
     const winner = winnerIndex === 0 ? this.fighter1 : this.fighter2;
     const loser = winnerIndex === 0 ? this.fighter2 : this.fighter1;
+    winner.body.body.setVelocity(0, 0);
     winner.enterState('VICTORY');
     loser.enterState('KO');
 
