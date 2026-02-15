@@ -10,6 +10,7 @@ import {
   spawnElectricSparks, spawnSlashMark, spawnArmorGlow, spawnWhirlwindArcs,
   spawnChargingAura, spawnExplosionRing, spawnSmokePuff, spawnTeleportFlash,
   spawnGroundCrack, spawnComboFinisher, spawnWallImpact,
+  spawnDiveKickTrail, spawnDiveKickLanding,
 } from '../effects/SpecialEffects.js';
 
 const STATES = {
@@ -17,8 +18,10 @@ const STATES = {
   WALK_FORWARD: 'WALK_FORWARD',
   WALK_BACKWARD: 'WALK_BACKWARD',
   JUMP: 'JUMP',
+  DOUBLE_JUMP: 'DOUBLE_JUMP',
   PUNCH: 'PUNCH',
   KICK: 'KICK',
+  DIVE_KICK: 'DIVE_KICK',
   SPECIAL: 'SPECIAL',
   COMBO_FINISHER: 'COMBO_FINISHER',
   WALL_SPECIAL: 'WALL_SPECIAL',
@@ -48,6 +51,8 @@ export class Fighter {
     this.hasHit = false; // Prevents same attack hitting twice
     this.specialHitCount = 0; // For multi-hit specials (flurry)
     this.armorActive = false; // For armor smash
+    this.hasDoubleJumped = false; // One double jump per air time
+    this.doubleJumpDir = 0; // 0=neutral, 1=forward, -1=backward
     this._effectPhase = 0; // Tracks which one-shot effects have fired
     this._effectTimer = 0; // Timer for periodic effects
 
@@ -192,8 +197,10 @@ export class Fighter {
     ].includes(this.state);
     const inAir = !this.isGrounded;
 
+    const inAirAttackable = inAir && (this.state === STATES.JUMP || this.state === STATES.DOUBLE_JUMP);
+
     // Attack inputs (priority over movement, requires cooldown expired)
-    if ((inActionableState || (inAir && this.state === STATES.JUMP)) && this.attackCooldown <= 0) {
+    if ((inActionableState || inAirAttackable) && this.attackCooldown <= 0) {
       // Special (standing only, grounded only)
       if (input.special && this.specialCooldown <= 0 && this.isGrounded
           && this.state !== STATES.CROUCH) {
@@ -222,8 +229,20 @@ export class Fighter {
         }
       }
 
-      // Standing attacks (from any non-crouch actionable state or jump)
-      if (this.state !== STATES.CROUCH) {
+      // Air attacks: kick becomes dive kick, punch stays normal
+      if (inAirAttackable) {
+        if (input.kick) {
+          this.enterState(STATES.DIVE_KICK);
+          return;
+        }
+        if (input.punch) {
+          this.enterState(STATES.PUNCH);
+          return;
+        }
+      }
+
+      // Standing attacks (from any non-crouch actionable state)
+      if (this.state !== STATES.CROUCH && !inAirAttackable) {
         if (input.punch) {
           this.enterState(STATES.PUNCH);
           return;
@@ -260,9 +279,27 @@ export class Fighter {
       return;
     }
 
+    // Double jump (from JUMP only, once per air time)
+    if (input.jump && !this.hasDoubleJumped && this.state === STATES.JUMP && !this.isGrounded) {
+      this.hasDoubleJumped = true;
+      this.body.body.setVelocityY(this.data.jumpVelocity * 0.85);
+      // Determine direction: forward, backward, or neutral
+      const dir = this.facingRight ? 1 : -1;
+      if ((input.right && dir > 0) || (input.left && dir < 0)) {
+        this.doubleJumpDir = 1; // forward
+      } else if ((input.left && dir > 0) || (input.right && dir < 0)) {
+        this.doubleJumpDir = -1; // backward
+      } else {
+        this.doubleJumpDir = 0; // neutral — defaults to forward anim
+      }
+      this.enterState(STATES.DOUBLE_JUMP);
+      return;
+    }
+
     // Movement (only on ground in actionable states, never during attacks or crouch)
     if (this.state !== STATES.BLOCK && this.state !== STATES.CROUCH
-        && this.state !== STATES.JUMP && !this.isAttacking()) {
+        && this.state !== STATES.JUMP && this.state !== STATES.DOUBLE_JUMP
+        && !this.isAttacking()) {
       if (input.left) {
         this.body.body.setVelocityX(-this.data.moveSpeed);
         if (this.isGrounded) {
@@ -284,7 +321,7 @@ export class Fighter {
     }
 
     // Air movement (reduced)
-    if (this.state === STATES.JUMP) {
+    if (this.state === STATES.JUMP || this.state === STATES.DOUBLE_JUMP) {
       if (input.left) {
         this.body.body.setVelocityX(-this.data.moveSpeed * 0.7);
       } else if (input.right) {
@@ -300,6 +337,7 @@ export class Fighter {
       case STATES.SPECIAL: return this.specialDuration;
       case STATES.WALL_SPECIAL: return 600;
       case STATES.COMBO_FINISHER: return 450;
+      case STATES.DIVE_KICK: return 0; // No fixed duration — ends on landing
       default: return 0;
     }
   }
@@ -420,10 +458,44 @@ export class Fighter {
 
       case STATES.JUMP:
         if (this.isGrounded && this.stateTimer > 100) {
+          this.hasDoubleJumped = false;
           this.body.body.setVelocityX(0);
           this.enterState(STATES.IDLE);
         }
         break;
+
+      case STATES.DOUBLE_JUMP:
+        if (this.isGrounded && this.stateTimer > 100) {
+          this.hasDoubleJumped = false;
+          this.body.body.setVelocityX(0);
+          this.enterState(STATES.IDLE);
+        }
+        break;
+
+      case STATES.DIVE_KICK: {
+        const dkDir = this.facingRight ? 1 : -1;
+        this.body.body.setVelocityX(dkDir * this.data.moveSpeed * 1.2);
+        this.body.body.setVelocityY(600);
+        // Trail VFX
+        if (this._effectTimer > 40) {
+          this._effectTimer = 0;
+          const footY = this.y + GAME_CONFIG.BODY_HEIGHT / 2;
+          spawnDiveKickTrail(this.scene, this.x, footY - 20, dkDir, this.data.color);
+        }
+        // Land on ground
+        if (this.isGrounded && this.stateTimer > 50) {
+          const footY = this.y + GAME_CONFIG.BODY_HEIGHT / 2;
+          spawnDiveKickLanding(this.scene, this.x, footY, this.data.color);
+          this.scene.cameras.main.shake(80, 0.005);
+          this.hasDoubleJumped = false;
+          this.canAct = true;
+          this.hasHit = false;
+          this.attackCooldown = 200; // Brief recovery on landing
+          this.body.body.setVelocityX(0);
+          this.enterState(STATES.IDLE);
+        }
+        break;
+      }
 
       case STATES.KO:
         // Ragdoll physics replaces the old canned slide
@@ -789,13 +861,15 @@ export class Fighter {
     switch (newState) {
       case STATES.PUNCH: case STATES.CROUCH_PUNCH: SoundManager.punch(); break;
       case STATES.KICK: case STATES.CROUCH_KICK: SoundManager.kick(); break;
+      case STATES.DIVE_KICK: SoundManager.kick(); break;
       case STATES.SPECIAL: SoundManager.special(); break;
       case STATES.WALL_SPECIAL: SoundManager.special(); break;
       case STATES.COMBO_FINISHER: SoundManager.special(); break;
       case STATES.JUMP: SoundManager.jump(); break;
+      case STATES.DOUBLE_JUMP: SoundManager.jump(); break;
     }
 
-    if ([STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.WALL_SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
+    if ([STATES.PUNCH, STATES.KICK, STATES.DIVE_KICK, STATES.SPECIAL, STATES.WALL_SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(newState)) {
       this.canAct = false;
       this.hasHit = false;
 
@@ -815,9 +889,13 @@ export class Fighter {
       this.timeSinceLastAttack = 0;
     }
 
-    if (newState === STATES.SPECIAL || newState === STATES.WALL_SPECIAL || newState === STATES.COMBO_FINISHER) {
+    if (newState === STATES.SPECIAL || newState === STATES.WALL_SPECIAL || newState === STATES.COMBO_FINISHER || newState === STATES.DIVE_KICK) {
       this._effectPhase = 0;
       this._effectTimer = 0;
+    }
+
+    if (newState === STATES.DOUBLE_JUMP) {
+      this.canAct = true; // Somersault can be cancelled into attacks
     }
 
     if (newState === STATES.HIT) {
@@ -832,7 +910,7 @@ export class Fighter {
   }
 
   isAttacking() {
-    return [STATES.PUNCH, STATES.KICK, STATES.SPECIAL, STATES.WALL_SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
+    return [STATES.PUNCH, STATES.KICK, STATES.DIVE_KICK, STATES.SPECIAL, STATES.WALL_SPECIAL, STATES.COMBO_FINISHER, STATES.CROUCH_PUNCH, STATES.CROUCH_KICK].includes(this.state);
   }
 
   isOnActiveFrame() {
@@ -857,6 +935,9 @@ export class Fighter {
         activeStart = duration * 0.25;
         activeEnd = duration * 0.55;
         break;
+      case STATES.DIVE_KICK:
+        // Always active after 50ms until landing
+        return this.stateTimer > 50;
       case STATES.WALL_SPECIAL:
         duration = 600;
         activeStart = duration * 0.30;
@@ -910,6 +991,13 @@ export class Fighter {
           damage: Math.round(this.data.kickDamage * stale * comboScale),
           range: this.data.kickRange,
           knockback: GAME_CONFIG.KICK_KNOCKBACK * finisherKnockbackScale,
+          isCrouchAttack: false,
+        };
+      case STATES.DIVE_KICK:
+        return {
+          damage: Math.round(this.data.kickDamage * 1.2 * stale),
+          range: this.data.kickRange + 10,
+          knockback: GAME_CONFIG.KICK_KNOCKBACK * 1.3,
           isCrouchAttack: false,
         };
       case STATES.COMBO_FINISHER:
@@ -1072,12 +1160,19 @@ export class Fighter {
 
   createRagdoll(knockbackVelX, knockbackVelY, groundY) {
     // Snapshot current pose to world-space positions (mirrors transformPose logic)
-    const poseKey = this.state === STATES.COMBO_FINISHER
-      ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
-      : this.state === STATES.WALL_SPECIAL
-        ? 'COMBO_FINISHER_STRIKE'
-        : this.state;
-    const poses = POSES[poseKey];
+    let ragdollPoseKey;
+    if (this.state === STATES.COMBO_FINISHER) {
+      ragdollPoseKey = this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE';
+    } else if (this.state === STATES.WALL_SPECIAL) {
+      ragdollPoseKey = 'COMBO_FINISHER_STRIKE';
+    } else if (this.state === STATES.DOUBLE_JUMP) {
+      ragdollPoseKey = this.doubleJumpDir < 0 ? 'DOUBLE_JUMP_BACKWARD' : 'DOUBLE_JUMP_FORWARD';
+    } else if (this.state === STATES.DIVE_KICK) {
+      ragdollPoseKey = 'DIVE_KICK';
+    } else {
+      ragdollPoseKey = this.state;
+    }
+    const poses = POSES[ragdollPoseKey];
     if (!poses) return;
 
     const pose = poses[0]; // Use first frame of current state
@@ -1134,6 +1229,8 @@ export class Fighter {
     this.hasHit = false;
     this.specialHitCount = 0;
     this.armorActive = false;
+    this.hasDoubleJumped = false;
+    this.doubleJumpDir = 0;
     this._effectPhase = 0;
     this._effectTimer = 0;
     this.attackCooldown = 0;
@@ -1156,11 +1253,18 @@ export class Fighter {
       return;
     }
 
-    const poseKey = this.state === STATES.COMBO_FINISHER
-      ? (this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE')
-      : this.state === STATES.WALL_SPECIAL
-        ? 'COMBO_FINISHER_STRIKE'
-        : this.state;
+    let poseKey;
+    if (this.state === STATES.COMBO_FINISHER) {
+      poseKey = this.comboFinisherAnim === 'launch' ? 'COMBO_FINISHER_LAUNCH' : 'COMBO_FINISHER_STRIKE';
+    } else if (this.state === STATES.WALL_SPECIAL) {
+      poseKey = 'COMBO_FINISHER_STRIKE';
+    } else if (this.state === STATES.DOUBLE_JUMP) {
+      poseKey = this.doubleJumpDir < 0 ? 'DOUBLE_JUMP_BACKWARD' : 'DOUBLE_JUMP_FORWARD';
+    } else if (this.state === STATES.DIVE_KICK) {
+      poseKey = 'DIVE_KICK';
+    } else {
+      poseKey = this.state;
+    }
     const poses = POSES[poseKey];
     if (!poses) return;
 
@@ -1181,6 +1285,8 @@ export class Fighter {
         case STATES.COMBO_FINISHER: totalDuration = 450; break;
         case STATES.KO: totalDuration = 800; break;
         case STATES.JUMP: totalDuration = 600; break;
+        case STATES.DOUBLE_JUMP: totalDuration = 500; break;
+        case STATES.DIVE_KICK: totalDuration = 400; break;
         case STATES.HIT: totalDuration = GAME_CONFIG.HITSTUN_DURATION; break;
         case STATES.IDLE: totalDuration = 800; looping = true; break;
         case STATES.WALK_FORWARD: totalDuration = 400; looping = true; break;

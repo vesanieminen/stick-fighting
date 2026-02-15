@@ -597,6 +597,48 @@ export function spawnWallImpact(scene, wallX, impactY, color, wallSpecialType) {
   }
 }
 
+export function spawnDiveKickTrail(scene, x, y, dir, color) {
+  const g = scene.add.graphics().setDepth(7);
+  for (let i = 0; i < 5; i++) {
+    const px = x - dir * (i * 10) + (Math.random() - 0.5) * 8;
+    const py = y - (i * 6) + (Math.random() - 0.5) * 6;
+    const size = 2 + Math.random() * 3;
+    g.fillStyle(color, 0.5 - i * 0.08);
+    g.fillCircle(px, py, size);
+    // Diagonal streak line
+    g.lineStyle(2, color, 0.4 - i * 0.06);
+    g.lineBetween(px, py, px - dir * 12, py - 8);
+  }
+  scene.tweens.add({ targets: g, alpha: 0, duration: 180, onComplete: () => g.destroy() });
+}
+
+export function spawnDiveKickLanding(scene, x, y, color) {
+  // Dust burst
+  const g = scene.add.graphics().setDepth(8);
+  for (let i = 0; i < 8; i++) {
+    const angle = Math.PI + (Math.random() - 0.5) * Math.PI;
+    const dist = 8 + Math.random() * 18;
+    const size = 3 + Math.random() * 4;
+    g.fillStyle(0xaaaaaa, 0.5);
+    g.fillCircle(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist * 0.4, size);
+  }
+  scene.tweens.add({ targets: g, alpha: 0, duration: 350, onComplete: () => g.destroy() });
+
+  // Small shockwave ring
+  const ring = scene.add.graphics().setDepth(12);
+  scene.tweens.addCounter({
+    from: 5, to: 40, duration: 250,
+    onUpdate: (tween) => {
+      ring.clear();
+      const r = tween.getValue();
+      const t = (r - 5) / 35;
+      ring.lineStyle(2, color, (1 - t) * 0.7);
+      ring.strokeCircle(x, y, r);
+    },
+    onComplete: () => ring.destroy()
+  });
+}
+
 export function spawnGroundCrack(scene, x, y, color = 0x888888) {
   const g = scene.add.graphics().setDepth(3);
   for (let i = 0; i < 5; i++) {

@@ -115,6 +115,28 @@ export class AIController {
     const canSpecial = this.fighter.specialCooldown <= 0;
     const oppAttacking = this.opponent.isAttacking();
 
+    // Double jump chance when in air (JUMP state)
+    const inAir = !this.fighter.isGrounded;
+    if (inAir && this.fighter.state === 'JUMP' && !this.fighter.hasDoubleJumped) {
+      if (Math.random() < 0.20) {
+        a.jump = true;
+        // Move toward opponent during double jump
+        if (facingOpp) a.right = true;
+        else a.left = true;
+        this.currentActions = a;
+        return;
+      }
+    }
+
+    // Dive kick chance when airborne at medium range
+    if (inAir && (this.fighter.state === 'JUMP' || this.fighter.state === 'DOUBLE_JUMP') && dist < 250 && dist > 60) {
+      if (Math.random() < 0.15) {
+        a.kick = true;
+        this.currentActions = a;
+        return;
+      }
+    }
+
     if (dist > 250) {
       // Far range — walk toward opponent, occasionally jump
       if (facingOpp) a.right = true;

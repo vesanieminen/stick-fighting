@@ -20,6 +20,7 @@ export const FIGHTERS = [
     specialDuration: 500,
     wallSpecialType: 'wallPinRush',
     wallSpecialName: 'Pin Rush',
+    diveKickType: 'swiftDive',
     visual: {
       headRadius: 1.0,
       lineWidth: 0.85,
@@ -55,6 +56,7 @@ export const FIGHTERS = [
     specialDuration: 900,
     wallSpecialType: 'wallCrusher',
     wallSpecialName: 'Wall Crush',
+    diveKickType: 'heavyDive',
     visual: {
       headRadius: 1.2,
       lineWidth: 1.4,
@@ -89,6 +91,7 @@ export const FIGHTERS = [
     specialDuration: 550,
     wallSpecialType: 'wallShadowStrike',
     wallSpecialName: 'Shadow Pin',
+    diveKickType: 'shadowDive',
     maxHealth: 80,
     visual: {
       headRadius: 0.85,
@@ -125,6 +128,7 @@ export const FIGHTERS = [
     specialDuration: 650,
     wallSpecialType: 'wallInferno',
     wallSpecialName: 'Inferno Press',
+    diveKickType: 'flameDive',
     visual: {
       headRadius: 1.0,
       lineWidth: 1.0,
@@ -159,6 +163,7 @@ export const FIGHTERS = [
     specialDuration: 550,
     wallSpecialType: 'wallIcePin',
     wallSpecialName: 'Ice Cage',
+    diveKickType: 'frostDive',
     visual: {
       headRadius: 1.0,
       lineWidth: 1.0,
@@ -193,6 +198,7 @@ export const FIGHTERS = [
     specialDuration: 800,
     wallSpecialType: 'wallVoltage',
     wallSpecialName: 'Voltage Slam',
+    diveKickType: 'thunderDive',
     visual: {
       headRadius: 1.0,
       lineWidth: 1.1,
@@ -228,6 +234,7 @@ export const FIGHTERS = [
     specialDuration: 700,
     wallSpecialType: 'wallVenomBarrage',
     wallSpecialName: 'Venom Barrage',
+    diveKickType: 'venomDive',
     visual: {
       headRadius: 0.9,
       lineWidth: 0.8,
@@ -263,6 +270,7 @@ export const FIGHTERS = [
     specialDuration: 800,
     wallSpecialType: 'wallEarthenCrush',
     wallSpecialName: 'Earthen Crush',
+    diveKickType: 'stompDive',
     maxHealth: 120,
     visual: {
       headRadius: 1.35,
@@ -298,6 +306,7 @@ export const FIGHTERS = [
     specialDuration: 650,
     wallSpecialType: 'wallWraithDrive',
     wallSpecialName: 'Wraith Drive',
+    diveKickType: 'ghostDive',
     visual: {
       headRadius: 0.9,
       lineWidth: 0.7,
@@ -332,6 +341,7 @@ export const FIGHTERS = [
     specialDuration: 700,
     wallSpecialType: 'wallSupernovaPin',
     wallSpecialName: 'Supernova Pin',
+    diveKickType: 'novaDive',
     maxHealth: 70,
     visual: {
       headRadius: 1.0,

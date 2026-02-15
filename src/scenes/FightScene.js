@@ -764,6 +764,7 @@ export class FightScene extends Phaser.Scene {
       const wasBlocking = defender.state === 'BLOCK';
       const isComboFinisher = attacker.state === 'COMBO_FINISHER';
       const isWallSpecial = attacker.state === 'WALL_SPECIAL';
+      const isDiveKick = attacker.state === 'DIVE_KICK';
       const isComboHit = attacker.comboChain.length > 0;
 
       // Pass attack flags (e.g. blockPiercing, knockbackY) to takeDamage
@@ -796,8 +797,13 @@ export class FightScene extends Phaser.Scene {
           attacker.registerWallComboHit();
         }
 
-        // Hitstop on wall special / combo hits
-        if (isWallSpecial) {
+        // Hitstop on dive kick / wall special / combo hits
+        if (isDiveKick) {
+          attacker.applyHitstop(40);
+          defender.applyHitstop(40);
+          this.cameras.main.shake(100, 0.008);
+          this.showDiveKickText(attacker);
+        } else if (isWallSpecial) {
           attacker.applyHitstop(150);
           defender.applyHitstop(150);
           this.cameras.main.shake(300, 0.025);
@@ -889,6 +895,24 @@ export class FightScene extends Phaser.Scene {
       duration: 1000,
       ease: 'Power2',
       onComplete: () => { text.destroy(); shadow.destroy(); }
+    });
+  }
+
+  showDiveKickText(fighter) {
+    const fighterColor = `#${fighter.data.color.toString(16).padStart(6, '0')}`;
+    const textY = fighter.y - GAME_CONFIG.BODY_HEIGHT;
+
+    const text = this.add.text(fighter.x, textY, 'DIVE!', {
+      fontSize: '32px', fontFamily: 'monospace', color: fighterColor, fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(100);
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - 40,
+      alpha: 0,
+      duration: 600,
+      ease: 'Power2',
+      onComplete: () => text.destroy()
     });
   }
 
